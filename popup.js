@@ -9,8 +9,8 @@ function updateLeadsDisplay(data) {
   console.log("Popup: updateLeadsDisplay called with data:", data);
 
   // Check if we have valid data
-  if (!data || !data.data || !Array.isArray(data.data)) {
-    console.log("Popup: Invalid data format, data structure:", data);
+  if (!data) {
+    console.log("Popup: No data provided");
     leadsList.innerHTML =
       '<div class="no-leads">No leads captured yet. Please visit the IndiaMart Lead Manager page.</div>';
     totalLeadsSpan.textContent = "0";
@@ -20,7 +20,52 @@ function updateLeadsDisplay(data) {
     return;
   }
 
-  const leads = data.data;
+  // Ensure data has the expected structure
+  let processedData = data;
+  if (!data.data || !Array.isArray(data.data)) {
+    console.log(
+      "Popup: Data doesn't have the expected structure, attempting to fix"
+    );
+
+    // If data itself is an array, wrap it
+    if (Array.isArray(data)) {
+      console.log("Popup: Data is an array, wrapping it");
+      processedData = { data: data };
+    } else if (typeof data === "object") {
+      // Look for arrays in the data
+      let foundArray = false;
+      for (const key in data) {
+        if (Array.isArray(data[key])) {
+          console.log(`Popup: Found array in key "${key}"`);
+          processedData = { data: data[key] };
+          foundArray = true;
+          break;
+        }
+      }
+
+      if (!foundArray) {
+        console.log("Popup: Could not find any arrays in the data");
+        leadsList.innerHTML =
+          '<div class="no-leads">Invalid data format. Please visit the IndiaMart Lead Manager page to refresh the data.</div>';
+        totalLeadsSpan.textContent = "0";
+        exportCSVBtn.disabled = true;
+        exportJSONBtn.disabled = true;
+        clearDataBtn.disabled = true;
+        return;
+      }
+    } else {
+      console.log("Popup: Data is not an object or array");
+      leadsList.innerHTML =
+        '<div class="no-leads">Invalid data format. Please visit the IndiaMart Lead Manager page to refresh the data.</div>';
+      totalLeadsSpan.textContent = "0";
+      exportCSVBtn.disabled = true;
+      exportJSONBtn.disabled = true;
+      clearDataBtn.disabled = true;
+      return;
+    }
+  }
+
+  const leads = processedData.data;
   console.log("Popup: Found leads array with length:", leads.length);
 
   if (leads.length === 0) {
@@ -94,14 +139,26 @@ function updateLeadsDisplay(data) {
   });
 
   // Store the current data for export
-  window.currentLeadsData = data;
+  window.currentLeadsData = processedData;
 }
 
 // Function to export data as CSV
 function exportAsCSV() {
-  if (!window.currentLeadsData || !window.currentLeadsData.data) return;
+  if (
+    !window.currentLeadsData ||
+    !window.currentLeadsData.data ||
+    !Array.isArray(window.currentLeadsData.data)
+  ) {
+    console.log("Popup: Cannot export CSV - invalid data format");
+    alert("No valid data to export. Please refresh the data first.");
+    return;
+  }
 
   const leads = window.currentLeadsData.data;
+  if (leads.length === 0) {
+    alert("No leads to export.");
+    return;
+  }
 
   // Get all possible keys from all leads
   const allKeys = new Set();
@@ -147,7 +204,20 @@ function exportAsCSV() {
 
 // Function to export data as JSON
 function exportAsJSON() {
-  if (!window.currentLeadsData) return;
+  if (
+    !window.currentLeadsData ||
+    !window.currentLeadsData.data ||
+    !Array.isArray(window.currentLeadsData.data)
+  ) {
+    console.log("Popup: Cannot export JSON - invalid data format");
+    alert("No valid data to export. Please refresh the data first.");
+    return;
+  }
+
+  if (window.currentLeadsData.data.length === 0) {
+    alert("No leads to export.");
+    return;
+  }
 
   const jsonContent = JSON.stringify(window.currentLeadsData, null, 2);
   const blob = new Blob([jsonContent], { type: "application/json" });

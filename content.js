@@ -1,3 +1,86 @@
+// Function to ensure data has the correct structure
+function ensureCorrectDataStructure(data) {
+  console.log(
+    "IndiaMart Extension: Ensuring correct data structure in content script"
+  );
+
+  // If data is null or undefined, return an empty structure
+  if (!data) {
+    console.log(
+      "IndiaMart Extension: Data is null or undefined, creating empty structure"
+    );
+    return { data: [] };
+  }
+
+  // If data is already in the correct format, return it as is
+  if (data.data && Array.isArray(data.data)) {
+    console.log("IndiaMart Extension: Data already has correct structure");
+    return data;
+  }
+
+  // If data itself is an array, wrap it in the expected structure
+  if (Array.isArray(data)) {
+    console.log("IndiaMart Extension: Data is an array, wrapping it");
+    return { data: data };
+  }
+
+  // Look for arrays in the response that might contain the leads
+  if (typeof data === "object") {
+    console.log("IndiaMart Extension: Data is an object, looking for arrays");
+
+    // Check common field names in IndiaMart API responses
+    const possibleArrayFields = [
+      "data",
+      "leads",
+      "records",
+      "items",
+      "results",
+      "contacts",
+      "queries",
+    ];
+
+    // First check the common field names
+    for (const field of possibleArrayFields) {
+      if (data[field] && Array.isArray(data[field])) {
+        console.log(`IndiaMart Extension: Found array in field "${field}"`);
+        return { data: data[field] };
+      }
+    }
+
+    // If not found in common fields, check all fields
+    for (const key in data) {
+      if (Array.isArray(data[key]) && data[key].length > 0) {
+        console.log(`IndiaMart Extension: Found array in field "${key}"`);
+        return { data: data[key] };
+      }
+    }
+
+    // If we still haven't found an array, check if there's a nested structure
+    for (const key in data) {
+      if (
+        data[key] &&
+        typeof data[key] === "object" &&
+        !Array.isArray(data[key])
+      ) {
+        // Recursively check this object
+        const result = ensureCorrectDataStructure(data[key]);
+        if (result.data && Array.isArray(result.data)) {
+          console.log(
+            `IndiaMart Extension: Found array in nested object "${key}"`
+          );
+          return result;
+        }
+      }
+    }
+  }
+
+  // If we couldn't find any arrays, create an empty structure
+  console.log(
+    "IndiaMart Extension: Could not find any arrays, creating empty structure"
+  );
+  return { data: [] };
+}
+
 // Function to intercept fetch requests
 function interceptFetch() {
   const originalFetch = window.fetch;
@@ -36,46 +119,23 @@ function interceptFetch() {
             "IndiaMart Extension: Response structure:",
             Object.keys(data)
           );
+          console.log(
+            "IndiaMart Extension: Raw data sample:",
+            JSON.stringify(data).substring(0, 500) + "..."
+          );
 
-          // Check if the data has the expected structure
-          if (!data || !data.data) {
-            console.error(
-              "IndiaMart Extension: Unexpected data format, missing data array"
+          // Ensure the data has the correct structure
+          const processedData = ensureCorrectDataStructure(data);
+
+          // Log some information about the processed data
+          if (processedData.data && Array.isArray(processedData.data)) {
+            console.log(
+              `IndiaMart Extension: Found ${processedData.data.length} leads`
             );
-            console.log("IndiaMart Extension: Actual data:", data);
-
-            // Try to fix the data structure if needed
-            let fixedData = data;
-            if (data && Array.isArray(data)) {
-              // If the data is already an array, wrap it in the expected structure
-              fixedData = { data: data };
-              console.log(
-                "IndiaMart Extension: Fixed data structure by wrapping array"
-              );
-            } else if (data && typeof data === "object") {
-              // Look for arrays in the response that might contain the leads
-              for (const key in data) {
-                if (Array.isArray(data[key]) && data[key].length > 0) {
-                  // This might be the leads array
-                  fixedData = { data: data[key] };
-                  console.log(
-                    `IndiaMart Extension: Found potential leads array in key "${key}"`
-                  );
-                  break;
-                }
-              }
-            }
-
-            data = fixedData;
-          }
-
-          // Log some information about the data
-          if (data.data && Array.isArray(data.data)) {
-            console.log(`IndiaMart Extension: Found ${data.data.length} leads`);
-            if (data.data.length > 0) {
+            if (processedData.data.length > 0) {
               console.log(
                 "IndiaMart Extension: First lead sample:",
-                data.data[0]
+                processedData.data[0]
               );
             }
           }
@@ -85,7 +145,7 @@ function interceptFetch() {
             chrome.runtime.sendMessage(
               {
                 action: "STORE_LEADS_DATA",
-                data: data,
+                data: processedData,
               },
               function (response) {
                 if (chrome.runtime.lastError) {
@@ -126,36 +186,27 @@ function interceptXHR() {
   const originalOpen = XMLHttpRequest.prototype.open;
   const originalSend = XMLHttpRequest.prototype.send;
 
-  XMLHttpRequest.prototype.open = function (method, url) {
-    this._url = url;
-    this._method = method;
+  XMLHttpRequest.prototype.open = function () {
+    // Store the URL being requested
+    this._url = arguments[1];
     return originalOpen.apply(this, arguments);
   };
 
-  XMLHttpRequest.prototype.send = function (body) {
+  XMLHttpRequest.prototype.send = function () {
+    // Check if this is the target API
     if (this._url && this._url.includes("getContactList")) {
-      console.log("IndiaMart Extension: Detected getContactList XHR request");
-
-      // Check if this is a POST request with the expected payload format
-      if (this._method === "POST" && body) {
-        try {
-          const requestData = JSON.parse(body);
-          console.log("IndiaMart Extension: Request data:", requestData);
-        } catch (e) {
-          // Not JSON or couldn't parse
-        }
-      }
-
-      const xhr = this;
+      console.log(
+        "IndiaMart Extension: Detected getContactList API call via XHR"
+      );
 
       // Store the original onreadystatechange
-      const originalOnReadyStateChange = xhr.onreadystatechange;
+      const originalOnReadyStateChange = this.onreadystatechange;
 
       // Override onreadystatechange
-      xhr.onreadystatechange = function () {
-        if (xhr.readyState === 4 && xhr.status === 200) {
+      this.onreadystatechange = function () {
+        if (this.readyState === 4 && this.status === 200) {
           try {
-            const data = JSON.parse(xhr.responseText);
+            const data = JSON.parse(this.responseText);
             console.log(
               "IndiaMart Extension: Successfully captured Lead Manager data via XHR"
             );
@@ -163,38 +214,15 @@ function interceptXHR() {
               "IndiaMart Extension: Response structure:",
               Object.keys(data)
             );
+            console.log(
+              "IndiaMart Extension: Raw data sample:",
+              JSON.stringify(data).substring(0, 500) + "..."
+            );
 
-            // Check if the data has the expected structure
-            let processedData = data;
-            if (!data || !data.data) {
-              console.error(
-                "IndiaMart Extension: Unexpected data format, missing data array"
-              );
-              console.log("IndiaMart Extension: Actual data:", data);
+            // Ensure the data has the correct structure
+            const processedData = ensureCorrectDataStructure(data);
 
-              // Try to fix the data structure if needed
-              if (data && Array.isArray(data)) {
-                // If the data is already an array, wrap it in the expected structure
-                processedData = { data: data };
-                console.log(
-                  "IndiaMart Extension: Fixed data structure by wrapping array"
-                );
-              } else if (data && typeof data === "object") {
-                // Look for arrays in the response that might contain the leads
-                for (const key in data) {
-                  if (Array.isArray(data[key]) && data[key].length > 0) {
-                    // This might be the leads array
-                    processedData = { data: data[key] };
-                    console.log(
-                      `IndiaMart Extension: Found potential leads array in key "${key}"`
-                    );
-                    break;
-                  }
-                }
-              }
-            }
-
-            // Log some information about the data
+            // Log some information about the processed data
             if (processedData.data && Array.isArray(processedData.data)) {
               console.log(
                 `IndiaMart Extension: Found ${processedData.data.length} leads`
@@ -257,41 +285,29 @@ function interceptXHR() {
 function fetchLeadData() {
   console.log("IndiaMart Extension: Manually fetching lead data");
 
-  // Create the request data exactly as specified in the curl command
+  // Create request data
   const requestData = {
-    start: 1,
-    end: 25,
-    type: 0,
+    start: 0,
+    end: 100,
+    type: "all",
     last_contact_date: "",
   };
 
-  // Get cookies from the document
-  const cookies = document.cookie;
+  console.log("IndiaMart Extension: Request data:", requestData);
   console.log(
-    "IndiaMart Extension: Cookies available:",
-    cookies ? "Yes" : "No"
+    "IndiaMart Extension: Document cookies available:",
+    document.cookie ? "Yes" : "No"
   );
 
-  // Make the fetch request with all the headers from the curl command
+  // Make the API request
   fetch("https://seller.indiamart.com/lmsreact/getContactList", {
     method: "POST",
     headers: {
-      accept: "*/*",
-      "accept-language": "en-GB,en-US;q=0.9,en;q=0.8,hi;q=0.7",
-      "content-type": "application/json",
-      origin: "https://seller.indiamart.com",
-      priority: "u=1, i",
-      referer: "https://seller.indiamart.com/messagecentre",
-      "sec-ch-ua":
-        '"Not A;Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
-      "sec-ch-ua-mobile": "?0",
-      "sec-ch-ua-platform": '"macOS"',
-      "sec-fetch-dest": "empty",
-      "sec-fetch-mode": "cors",
-      "sec-fetch-site": "same-origin",
+      "Content-Type": "application/json",
+      Accept: "application/json",
     },
-    credentials: "include", // Important: include cookies
     body: JSON.stringify(requestData),
+    credentials: "include", // Include cookies
   })
     .then((response) => {
       if (!response.ok) {
@@ -307,44 +323,24 @@ function fetchLeadData() {
         "IndiaMart Extension: Response structure:",
         Object.keys(data)
       );
+      console.log(
+        "IndiaMart Extension: Raw data sample:",
+        JSON.stringify(data).substring(0, 500) + "..."
+      );
 
-      // Check if the data has the expected structure
-      if (!data || !data.data) {
-        console.error(
-          "IndiaMart Extension: Unexpected data format, missing data array"
+      // Ensure the data has the correct structure
+      const processedData = ensureCorrectDataStructure(data);
+
+      // Log some information about the processed data
+      if (processedData.data && Array.isArray(processedData.data)) {
+        console.log(
+          `IndiaMart Extension: Found ${processedData.data.length} leads`
         );
-        console.log("IndiaMart Extension: Actual data:", data);
-
-        // Try to fix the data structure if needed
-        let fixedData = data;
-        if (data && Array.isArray(data)) {
-          // If the data is already an array, wrap it in the expected structure
-          fixedData = { data: data };
+        if (processedData.data.length > 0) {
           console.log(
-            "IndiaMart Extension: Fixed data structure by wrapping array"
+            "IndiaMart Extension: First lead sample:",
+            processedData.data[0]
           );
-        } else if (data && typeof data === "object") {
-          // Look for arrays in the response that might contain the leads
-          for (const key in data) {
-            if (Array.isArray(data[key]) && data[key].length > 0) {
-              // This might be the leads array
-              fixedData = { data: data[key] };
-              console.log(
-                `IndiaMart Extension: Found potential leads array in key "${key}"`
-              );
-              break;
-            }
-          }
-        }
-
-        data = fixedData;
-      }
-
-      // Log some information about the data
-      if (data.data && Array.isArray(data.data)) {
-        console.log(`IndiaMart Extension: Found ${data.data.length} leads`);
-        if (data.data.length > 0) {
-          console.log("IndiaMart Extension: First lead sample:", data.data[0]);
         }
       }
 
@@ -353,7 +349,7 @@ function fetchLeadData() {
         chrome.runtime.sendMessage(
           {
             action: "STORE_LEADS_DATA",
-            data: data,
+            data: processedData,
           },
           function (response) {
             if (chrome.runtime.lastError) {
@@ -371,10 +367,7 @@ function fetchLeadData() {
       }
     })
     .catch((error) => {
-      console.error(
-        "IndiaMart Extension: Error fetching Lead Manager data manually",
-        error
-      );
+      console.error("IndiaMart Extension: Error fetching lead data:", error);
     });
 }
 
