@@ -1,0 +1,147 @@
+// Google Apps Script for IndiaMart Lead Manager Extension
+// Copy this entire script to a new Google Apps Script project
+// Then deploy it as a web app to get a URL that can be used by the extension
+
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({
+    status: 'error',
+    message: 'This endpoint only accepts POST requests'
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  try {
+    // Get the sheet ID from the URL parameters
+    var sheetId = e.parameter.sheetId;
+    
+    if (!sheetId) {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'error',
+        message: 'No sheet ID provided'
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Get the data from the request
+    var data = e.postData.contents;
+    if (!data) {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'error',
+        message: 'No data provided'
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Parse the data
+    var parsedData;
+    try {
+      parsedData = JSON.parse(data);
+    } catch (error) {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'error',
+        message: 'Invalid JSON data: ' + error.message
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Open the spreadsheet
+    var spreadsheet;
+    try {
+      spreadsheet = SpreadsheetApp.openById(sheetId);
+    } catch (error) {
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'error',
+        message: 'Could not open spreadsheet: ' + error.message
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // Get the first sheet
+    var sheet = spreadsheet.getSheets()[0];
+    
+    // Clear the sheet
+    sheet.clear();
+    
+    // Define the specific fields to include
+    var specificFields = [
+      "contact_last_product",
+      "contacts_name",
+      "contacts_mobile1",
+      "contact_city",
+      "last_contact_date",
+      "last_product_qty",
+      "contacts_company"
+    ];
+    
+    // Add the headers to the sheet with friendly names
+    var friendlyHeaders = [
+      "PRODUCT",
+      "CUSTOMER",
+      "CONTACT",
+      "CITY",
+      "LEAD DATE",
+      "REQUIREMENTS",
+      "FIRM"
+    ];
+    
+    // Set the headers in the sheet
+    var headerRange = sheet.getRange(1, 1, 1, friendlyHeaders.length);
+    headerRange.setValues([friendlyHeaders]);
+    
+    // Format the headers with bold and larger font
+    headerRange.setFontWeight('bold');
+    headerRange.setFontSize(12); // Increase font size
+    
+    // Prepare the data rows with only the specific fields
+    var rows = [];
+    for (var i = 0; i < parsedData.data.length; i++) {
+      var lead = parsedData.data[i];
+      var row = [];
+      
+      for (var j = 0; j < specificFields.length; j++) {
+        var field = specificFields[j];
+        // Check for the field using various possible naming conventions
+        var value = lead[field] || 
+                   lead[field.replace('contacts_', 'contact_')] || 
+                   lead[field.replace('contact_', 'contacts_')] || 
+                   lead[field.replace('_', '')] || 
+                   lead[field.replace('_', '-')] || 
+                   '';
+        row.push(value);
+      }
+      
+      rows.push(row);
+    }
+    
+    // Add the data to the sheet
+    if (rows.length > 0) {
+      sheet.getRange(2, 1, rows.length, specificFields.length).setValues(rows);
+    }
+    
+    // Auto-resize columns
+    for (var i = 1; i <= friendlyHeaders.length; i++) {
+      sheet.autoResizeColumn(i);
+    }
+    
+    // Set CORS headers for cross-domain requests
+    var output = ContentService.createTextOutput(JSON.stringify({
+      status: 'success',
+      message: 'Data imported successfully',
+      rowCount: rows.length
+    })).setMimeType(ContentService.MimeType.JSON);
+    
+    return output;
+    
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: 'error',
+      message: 'An unexpected error occurred: ' + error.message
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// Instructions for setting up this script:
+// 1. Go to https://script.google.com/ and create a new project
+// 2. Copy and paste this entire script into the editor
+// 3. Click on Deploy > New deployment
+// 4. Select "Web app" as the deployment type
+// 5. Set "Who has access" to "Anyone"
+// 6. Click "Deploy"
+// 7. Copy the Web app URL that is generated
+// 8. Use this URL in your extension's configuration 

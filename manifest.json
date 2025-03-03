@@ -4,7 +4,10 @@
   "version": "1.0",
   "description": "Captures and stores lead data from IndiaMart Lead Manager",
   "permissions": ["webRequest", "storage", "scripting", "tabs", "cookies"],
-  "host_permissions": ["https://seller.indiamart.com/*"],
+  "host_permissions": [
+    "https://seller.indiamart.com/*",
+    "https://docs.google.com/spreadsheets/*"
+  ],
   "background": {
     "service_worker": "background.js",
     "type": "module"

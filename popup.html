@@ -43,6 +43,8 @@
       display: flex;
       justify-content: space-between;
       margin-top: 15px;
+      flex-wrap: wrap;
+      gap: 10px;
     }
     button {
       padding: 8px 15px;
@@ -51,6 +53,8 @@
       border: none;
       border-radius: 4px;
       cursor: pointer;
+      flex: 1;
+      min-width: 120px;
     }
     button:hover {
       background-color: #3367d6;
@@ -58,6 +62,37 @@
     button:disabled {
       background-color: #ccc;
       cursor: not-allowed;
+    }
+    #transferSheets {
+      background-color: #0f9d58; /* Google Sheets green color */
+    }
+    #transferSheets:hover {
+      background-color: #0b8043;
+    }
+    #transferSheets:disabled {
+      background-color: #ccc;
+    }
+    .sheet-url-container {
+      margin-top: 15px;
+      display: none;
+    }
+    #sheetUrl {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .sheet-url-container label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    .info-text {
+      font-size: 12px;
+      color: #666;
+      margin-top: 5px;
+      margin-bottom: 10px;
     }
   </style>
 </head>
@@ -72,7 +107,17 @@
   <div class="button-container">
     <button id="exportCSV" disabled>Export as CSV</button>
     <button id="exportJSON" disabled>Export as JSON</button>
+    <button id="transferSheets" disabled>Transfer to Sheets</button>
     <button id="clearData" disabled>Clear Data</button>
+  </div>
+  <div id="sheetUrlContainer" class="sheet-url-container">
+    <label for="sheetUrl">Google Sheet URL:</label>
+    <input type="text" id="sheetUrl" placeholder="Paste your Google Sheet URL here">
+    <div class="info-text">
+      Enter the URL of your Google Sheet. The extension will automatically transfer the lead data.
+      Make sure your Google Sheet is accessible (not restricted).
+    </div>
+    <button id="confirmTransfer">Transfer Data</button>
   </div>
   <script src="popup.js"></script>
 </body>

@@ -4,6 +4,7 @@ function updateLeadsDisplay(data) {
   const totalLeadsSpan = document.getElementById("totalLeads");
   const exportCSVBtn = document.getElementById("exportCSV");
   const exportJSONBtn = document.getElementById("exportJSON");
+  const transferSheetsBtn = document.getElementById("transferSheets");
   const clearDataBtn = document.getElementById("clearData");
 
   console.log("Popup: updateLeadsDisplay called with data:", data);
@@ -16,6 +17,7 @@ function updateLeadsDisplay(data) {
     totalLeadsSpan.textContent = "0";
     exportCSVBtn.disabled = true;
     exportJSONBtn.disabled = true;
+    transferSheetsBtn.disabled = true;
     clearDataBtn.disabled = true;
     return;
   }
@@ -50,6 +52,7 @@ function updateLeadsDisplay(data) {
         totalLeadsSpan.textContent = "0";
         exportCSVBtn.disabled = true;
         exportJSONBtn.disabled = true;
+        transferSheetsBtn.disabled = true;
         clearDataBtn.disabled = true;
         return;
       }
@@ -60,6 +63,7 @@ function updateLeadsDisplay(data) {
       totalLeadsSpan.textContent = "0";
       exportCSVBtn.disabled = true;
       exportJSONBtn.disabled = true;
+      transferSheetsBtn.disabled = true;
       clearDataBtn.disabled = true;
       return;
     }
@@ -74,6 +78,7 @@ function updateLeadsDisplay(data) {
     totalLeadsSpan.textContent = "0";
     exportCSVBtn.disabled = true;
     exportJSONBtn.disabled = true;
+    transferSheetsBtn.disabled = true;
     clearDataBtn.disabled = true;
     return;
   }
@@ -81,6 +86,7 @@ function updateLeadsDisplay(data) {
   // Enable export buttons
   exportCSVBtn.disabled = false;
   exportJSONBtn.disabled = false;
+  transferSheetsBtn.disabled = false;
   clearDataBtn.disabled = false;
 
   totalLeadsSpan.textContent = leads.length;
@@ -160,22 +166,43 @@ function exportAsCSV() {
     return;
   }
 
-  // Get all possible keys from all leads
-  const allKeys = new Set();
+  // Define the specific fields to include
+  const specificFields = [
+    "contact_last_product",
+    "contacts_name",
+    "contacts_mobile1",
+    "contact_city",
+    "last_contact_date",
+    "last_product_qty",
+    "contacts_company",
+  ];
+
+  // Define friendly headers for the CSV with the requested titles
+  const friendlyHeaders = [
+    "PRODUCT",
+    "CUSTOMER",
+    "CONTACT",
+    "CITY",
+    "LEAD DATE",
+    "REQUIREMENTS",
+    "FIRM",
+  ];
+
+  // Create CSV content with only the specific fields
+  let csvContent = friendlyHeaders.join(",") + "\n";
+
   leads.forEach((lead) => {
-    Object.keys(lead).forEach((key) => allKeys.add(key));
-  });
+    const row = specificFields.map((field) => {
+      // Check for the field using various possible naming conventions
+      let value =
+        lead[field] ||
+        lead[field.replace("contacts_", "contact_")] ||
+        lead[field.replace("contact_", "contacts_")] ||
+        lead[field.replace("_", "")] ||
+        lead[field.replace("_", "-")] ||
+        "";
 
-  // Convert Set to Array
-  const headers = Array.from(allKeys);
-
-  // Create CSV content
-  let csvContent = headers.join(",") + "\n";
-
-  leads.forEach((lead) => {
-    const row = headers.map((header) => {
       // Handle values that might contain commas or quotes
-      let value = lead[header] || "";
       if (
         typeof value === "string" &&
         (value.includes(",") || value.includes('"'))
@@ -234,6 +261,176 @@ function exportAsJSON() {
   document.body.removeChild(link);
 }
 
+// Function to show the Google Sheets URL input
+function showTransferToSheets() {
+  const sheetUrlContainer = document.getElementById("sheetUrlContainer");
+  sheetUrlContainer.style.display = "block";
+
+  // Focus on the input field
+  document.getElementById("sheetUrl").focus();
+}
+
+// Function to transfer data to Google Sheets
+function transferToGoogleSheets() {
+  if (
+    !window.currentLeadsData ||
+    !window.currentLeadsData.data ||
+    !Array.isArray(window.currentLeadsData.data)
+  ) {
+    console.log(
+      "Popup: Cannot transfer to Google Sheets - invalid data format"
+    );
+    alert("No valid data to transfer. Please refresh the data first.");
+    return;
+  }
+
+  const leads = window.currentLeadsData.data;
+  if (leads.length === 0) {
+    alert("No leads to transfer.");
+    return;
+  }
+
+  const sheetUrl = document.getElementById("sheetUrl").value.trim();
+  if (!sheetUrl) {
+    alert("Please enter a valid Google Sheet URL.");
+    return;
+  }
+
+  // Extract the sheet ID from the URL
+  let sheetId;
+  try {
+    const url = new URL(sheetUrl);
+    const pathParts = url.pathname.split("/");
+    sheetId = pathParts.find((part) => part.length > 25); // Google Sheet IDs are typically long
+
+    if (!sheetId) {
+      throw new Error("Could not extract Sheet ID from URL");
+    }
+  } catch (error) {
+    console.error("Error parsing Google Sheet URL:", error);
+    alert(
+      "Invalid Google Sheet URL. Please make sure you've copied the entire URL."
+    );
+    return;
+  }
+
+  // Define the specific fields to include
+  const specificFields = [
+    "contact_last_product",
+    "contacts_name",
+    "contacts_mobile1",
+    "contact_city",
+    "last_contact_date",
+    "last_product_qty",
+    "contacts_company",
+  ];
+
+  // Define friendly headers for the CSV with the requested titles
+  const friendlyHeaders = [
+    "PRODUCT",
+    "CUSTOMER",
+    "CONTACT",
+    "CITY",
+    "LEAD DATE",
+    "REQUIREMENTS",
+    "FIRM",
+  ];
+
+  // Create HTML content for clipboard to preserve formatting
+  let htmlContent = "<table><tr>";
+  friendlyHeaders.forEach((header) => {
+    htmlContent += `<th style="font-weight: bold; font-size: larger;">${header}</th>`;
+  });
+  htmlContent += "</tr>";
+
+  // Create plain text content for clipboard fallback
+  let textContent = friendlyHeaders.join("\t") + "\n";
+
+  // Add data rows
+  leads.forEach((lead) => {
+    htmlContent += "<tr>";
+    const rowValues = specificFields.map((field) => {
+      // Check for the field using various possible naming conventions
+      let value =
+        lead[field] ||
+        lead[field.replace("contacts_", "contact_")] ||
+        lead[field.replace("contact_", "contacts_")] ||
+        lead[field.replace("_", "")] ||
+        lead[field.replace("_", "-")] ||
+        "";
+
+      htmlContent += `<td>${value}</td>`;
+      return value;
+    });
+    htmlContent += "</tr>";
+    textContent += rowValues.join("\t") + "\n";
+  });
+
+  htmlContent += "</table>";
+
+  // Copy to clipboard with HTML formatting
+  const clipboardItem = new ClipboardItem({
+    "text/plain": new Blob([textContent], { type: "text/plain" }),
+    "text/html": new Blob([htmlContent], { type: "text/html" }),
+  });
+
+  navigator.clipboard
+    .write([clipboardItem])
+    .then(() => {
+      // Open the Google Sheet in a new tab
+      const sheetTabUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
+      window.open(sheetTabUrl, "_blank");
+
+      // Show instructions to the user with clipboard option
+      alert(`The filtered lead data has been copied to your clipboard with formatted headers. Please follow these steps:
+
+1. The Google Sheet has opened in a new tab
+2. Click on cell A1 in the sheet
+3. Press Ctrl+V (or Cmd+V on Mac) to paste the data
+4. The data will be automatically formatted into columns with bold, larger headers
+
+The following fields have been included with updated titles:
+- PRODUCT (was Product)
+- CUSTOMER (was Name)
+- CONTACT (was Mobile)
+- CITY (was City)
+- LEAD DATE (was Last Contact Date)
+- REQUIREMENTS (was Quantity)
+- FIRM (was Company)`);
+
+      // Hide the URL input container
+      document.getElementById("sheetUrlContainer").style.display = "none";
+    })
+    .catch((err) => {
+      console.error("Failed to copy to clipboard:", err);
+
+      // Fallback to the old method if clipboard API fails
+      const textarea = document.createElement("textarea");
+      textarea.value = textContent;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+
+      // Open the Google Sheet in a new tab
+      const sheetTabUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
+      window.open(sheetTabUrl, "_blank");
+
+      // Show instructions to the user with clipboard option
+      alert(`The filtered lead data has been copied to your clipboard. Please follow these steps:
+
+1. The Google Sheet has opened in a new tab
+2. Click on cell A1 in the sheet
+3. Press Ctrl+V (or Cmd+V on Mac) to paste the data
+4. The data will be automatically formatted into columns
+
+Note: The formatting for bold headers couldn't be applied due to browser limitations.`);
+
+      // Hide the URL input container
+      document.getElementById("sheetUrlContainer").style.display = "none";
+    });
+}
+
 // Function to clear stored data
 function clearStoredData() {
   if (confirm("Are you sure you want to clear all stored lead data?")) {
@@ -270,6 +467,12 @@ document.addEventListener("DOMContentLoaded", function () {
   console.log("Popup: DOM content loaded");
   document.getElementById("exportCSV").addEventListener("click", exportAsCSV);
   document.getElementById("exportJSON").addEventListener("click", exportAsJSON);
+  document
+    .getElementById("transferSheets")
+    .addEventListener("click", showTransferToSheets);
+  document
+    .getElementById("confirmTransfer")
+    .addEventListener("click", transferToGoogleSheets);
   document
     .getElementById("clearData")
     .addEventListener("click", clearStoredData);
