@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>IndiaMart Lead Manager</title>
+  <style>
+    body {
+      width: 400px;
+      padding: 15px;
+      font-family: Arial, sans-serif;
+    }
+    .header {
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #ccc;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .lead-count {
+      color: #666;
+      font-size: 14px;
+      margin-top: 5px;
+    }
+    #leadsList {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .lead-item {
+      padding: 10px;
+      border: 1px solid #eee;
+      margin-bottom: 10px;
+      border-radius: 4px;
+    }
+    .lead-item:hover {
+      background-color: #f9f9f9;
+    }
+    .no-leads {
+      color: #666;
+      text-align: center;
+      padding: 20px;
+    }
+    .button-container {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 15px;
+    }
+    button {
+      padding: 8px 15px;
+      background-color: #4285f4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #3367d6;
+    }
+    button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>IndiaMart Leads</h2>
+    <div class="lead-count">Total Leads: <span id="totalLeads">0</span></div>
+  </div>
+  <div id="leadsList">
+    <div class="no-leads">No leads captured yet. Please visit the IndiaMart Lead Manager page.</div>
+  </div>
+  <div class="button-container">
+    <button id="exportCSV" disabled>Export as CSV</button>
+    <button id="exportJSON" disabled>Export as JSON</button>
+    <button id="clearData" disabled>Clear Data</button>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html> 
