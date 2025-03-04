@@ -57,44 +57,215 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log("Background: Received lead data");
 
     try {
+      // Check if this is a large data notification
+      if (message.isLarge) {
+        console.log(
+          `Background: Received large data notification (${message.originalSize} bytes)`
+        );
+        console.log("Background: Only storing summary data");
+
+        // Store the summary data in local storage
+        chrome.storage.local.set(
+          { indiamartLeads: message.data, isPartialData: true },
+          () => {
+            if (chrome.runtime.lastError) {
+              console.error(
+                "Background: Error storing summary data:",
+                chrome.runtime.lastError
+              );
+              sendResponse({
+                status: "error",
+                message: "Failed to store summary data",
+              });
+              return;
+            }
+
+            console.log("Background: Summary data stored in local storage");
+
+            // Notify any open popups about the new data
+            try {
+              chrome.runtime.sendMessage(
+                {
+                  type: "NEW_LEADS",
+                  data: message.data,
+                  isPartialData: true,
+                  originalSize: message.originalSize,
+                  timestamp: new Date().toISOString(),
+                },
+                (response) => {
+                  if (chrome.runtime.lastError) {
+                    console.log(
+                      "Background: No popup listening or error:",
+                      chrome.runtime.lastError
+                    );
+                    // This is expected if popup is not open, not an error
+                  } else {
+                    console.log(
+                      "Background: Popup received data, response:",
+                      response
+                    );
+                  }
+                }
+              );
+
+              // Send success response back to content script
+              sendResponse({
+                status: "success",
+                message: "Summary data stored successfully",
+                timestamp: new Date().toISOString(),
+              });
+            } catch (error) {
+              console.error(
+                "Background: Error sending message to popup:",
+                error
+              );
+              sendResponse({
+                status: "partial",
+                message: "Summary data stored but failed to notify popup",
+                timestamp: new Date().toISOString(),
+              });
+            }
+          }
+        );
+
+        return true; // Keep the message channel open for async response
+      }
+
       // Process the data to ensure correct structure
       const processedData = ensureCorrectDataStructure(message.data);
+
+      // Add metadata if not present
+      if (!processedData.timestamp) {
+        processedData.timestamp = new Date().toISOString();
+      }
+      if (!processedData.source) {
+        processedData.source = "indiamart_api";
+      }
+      if (!processedData.totalLeads && processedData.data) {
+        processedData.totalLeads = processedData.data.length;
+      }
+      if (typeof message.isRefresh !== "undefined") {
+        processedData.isRefresh = message.isRefresh;
+      }
 
       // Log the size of the data for debugging
       const dataSize = JSON.stringify(processedData).length;
       console.log(`Background: Data size: ${dataSize} bytes`);
+      console.log(`Background: Total leads: ${processedData.totalLeads}`);
+      console.log(`Background: Data source: ${processedData.source}`);
 
       // Store the data in local storage
-      chrome.storage.local.set({ indiamartLeads: processedData }, () => {
+      chrome.storage.local.set(
+        { indiamartLeads: processedData, isPartialData: false },
+        () => {
+          if (chrome.runtime.lastError) {
+            console.error(
+              "Background: Error storing data:",
+              chrome.runtime.lastError
+            );
+            sendResponse({ status: "error", message: "Failed to store data" });
+            return;
+          }
+
+          console.log("Background: Data stored in local storage");
+
+          // Notify any open popups about the new data
+          try {
+            chrome.runtime.sendMessage(
+              {
+                type: "NEW_LEADS",
+                data: processedData,
+                isRefresh: message.isRefresh || false,
+                timestamp: new Date().toISOString(),
+              },
+              (response) => {
+                if (chrome.runtime.lastError) {
+                  console.log(
+                    "Background: No popup listening or error:",
+                    chrome.runtime.lastError
+                  );
+                  // This is expected if popup is not open, not an error
+                } else {
+                  console.log(
+                    "Background: Popup received data, response:",
+                    response
+                  );
+                }
+              }
+            );
+
+            // Send success response back to content script
+            sendResponse({
+              status: "success",
+              message: "Data stored successfully",
+              timestamp: new Date().toISOString(),
+            });
+          } catch (error) {
+            console.error("Background: Error sending message to popup:", error);
+            sendResponse({
+              status: "partial",
+              message: "Data stored but failed to notify popup",
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
+      );
+    } catch (error) {
+      console.error("Background: Error processing data:", error);
+      sendResponse({
+        status: "error",
+        message: "Failed to process data: " + error.message,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    return true; // Keep the message channel open for async response
+  }
+
+  // Handle progress updates from content script
+  else if (message.type === "FETCH_PROGRESS") {
+    console.log("Background: Received fetch progress update:", message.data);
+
+    try {
+      // Add timestamp if not present
+      if (!message.data.timestamp) {
+        message.data.timestamp = new Date().toISOString();
+      }
+
+      // Store the latest progress in local storage
+      chrome.storage.local.set({ indiamartFetchProgress: message.data }, () => {
         if (chrome.runtime.lastError) {
           console.error(
-            "Background: Error storing data:",
+            "Background: Error storing progress:",
             chrome.runtime.lastError
           );
-          sendResponse({ status: "error", message: "Failed to store data" });
+          sendResponse({
+            status: "error",
+            message: "Failed to store progress",
+            timestamp: new Date().toISOString(),
+          });
           return;
         }
 
-        console.log("Background: Data stored in local storage");
-
-        // Notify any open popups about the new data
+        // Forward the progress update to any open popups
         try {
           chrome.runtime.sendMessage(
             {
-              type: "NEW_LEADS",
-              data: processedData,
+              type: "FETCH_PROGRESS_UPDATE",
+              data: message.data,
               isRefresh: message.isRefresh || false,
+              timestamp: new Date().toISOString(),
             },
             (response) => {
               if (chrome.runtime.lastError) {
+                // This is expected if popup is not open, not an error
                 console.log(
-                  "Background: No popup listening or error:",
+                  "Background: No popup listening for progress update:",
                   chrome.runtime.lastError
                 );
-                // This is expected if popup is not open, not an error
               } else {
                 console.log(
-                  "Background: Popup received data, response:",
+                  "Background: Popup received progress update, response:",
                   response
                 );
               }
@@ -104,19 +275,104 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           // Send success response back to content script
           sendResponse({
             status: "success",
-            message: "Data stored successfully",
+            message: "Progress update forwarded",
+            timestamp: new Date().toISOString(),
           });
         } catch (error) {
-          console.error("Background: Error sending message to popup:", error);
+          console.error("Background: Error sending progress to popup:", error);
           sendResponse({
             status: "partial",
-            message: "Data stored but failed to notify popup",
+            message: "Progress stored but failed to notify popup",
+            timestamp: new Date().toISOString(),
           });
         }
       });
     } catch (error) {
-      console.error("Background: Error processing data:", error);
-      sendResponse({ status: "error", message: "Failed to process data" });
+      console.error("Background: Error processing progress update:", error);
+      sendResponse({
+        status: "error",
+        message: "Failed to process progress update: " + error.message,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    return true; // Keep the message channel open for async response
+  }
+
+  // Handle error messages from content script
+  else if (message.type === "FETCH_ERROR") {
+    console.error("Background: Received fetch error:", message.error);
+
+    try {
+      // Store the error in local storage
+      chrome.storage.local.set(
+        {
+          indiamartFetchError: {
+            error: message.error,
+            timestamp: message.timestamp || new Date().toISOString(),
+          },
+        },
+        () => {
+          if (chrome.runtime.lastError) {
+            console.error(
+              "Background: Error storing fetch error:",
+              chrome.runtime.lastError
+            );
+            sendResponse({
+              status: "error",
+              message: "Failed to store fetch error",
+              timestamp: new Date().toISOString(),
+            });
+            return;
+          }
+
+          // Forward the error to any open popups
+          try {
+            chrome.runtime.sendMessage(
+              {
+                type: "FETCH_ERROR_UPDATE",
+                error: message.error,
+                timestamp: message.timestamp || new Date().toISOString(),
+              },
+              (response) => {
+                if (chrome.runtime.lastError) {
+                  // This is expected if popup is not open, not an error
+                  console.log(
+                    "Background: No popup listening for error update:",
+                    chrome.runtime.lastError
+                  );
+                } else {
+                  console.log(
+                    "Background: Popup received error update, response:",
+                    response
+                  );
+                }
+              }
+            );
+
+            // Send success response back to content script
+            sendResponse({
+              status: "success",
+              message: "Error forwarded to popup",
+              timestamp: new Date().toISOString(),
+            });
+          } catch (error) {
+            console.error("Background: Error sending error to popup:", error);
+            sendResponse({
+              status: "partial",
+              message: "Error stored but failed to notify popup",
+              timestamp: new Date().toISOString(),
+            });
+          }
+        }
+      );
+    } catch (error) {
+      console.error("Background: Error processing fetch error:", error);
+      sendResponse({
+        status: "error",
+        message: "Failed to process fetch error",
+        timestamp: new Date().toISOString(),
+      });
     }
 
     return true; // Keep the message channel open for async response

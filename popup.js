@@ -1,153 +1,280 @@
 // Function to update the leads display
-function updateLeadsDisplay(data) {
-  const totalLeadsSpan = document.getElementById("totalLeads");
-  const exportCSVBtn = document.getElementById("exportCSV");
-  const exportExcelBtn = document.getElementById("exportExcel");
-  const clearDataBtn = document.getElementById("clearData");
+function updateLeadsDisplay(data, page = 1) {
+  try {
+    const totalLeadsSpan = document.getElementById("totalLeads");
+    const exportCSVBtn = document.getElementById("exportCSV");
+    const exportExcelBtn = document.getElementById("exportExcel");
+    const clearDataBtn = document.getElementById("clearData");
+    const leadsTable = document.getElementById("leadsTable");
+    const leadsPerPage = 100; // Show 100 leads per page
 
-  console.log("Popup: updateLeadsDisplay called with data:", data);
+    console.log("Popup: updateLeadsDisplay called");
 
-  // If no data is provided, use the global variable
-  if (!data && window.currentLeadsData) {
-    console.log(
-      "Popup: Using window.currentLeadsData since no data was provided"
-    );
-    data = window.currentLeadsData;
-  }
+    // If no data is provided, use the global variable
+    if (!data && window.currentLeadsData) {
+      console.log(
+        "Popup: Using window.currentLeadsData since no data was provided"
+      );
+      data = window.currentLeadsData;
+    }
 
-  // Check if we have valid data
-  if (!data) {
-    console.log("Popup: No data available");
-    if (totalLeadsSpan) totalLeadsSpan.textContent = "0";
-    if (exportCSVBtn) exportCSVBtn.disabled = true;
-    if (exportExcelBtn) exportExcelBtn.disabled = true;
-    if (clearDataBtn) clearDataBtn.disabled = true;
-    return;
-  }
-
-  // Ensure data has the expected structure
-  let processedData = data;
-  if (!data.data || !Array.isArray(data.data)) {
-    console.log(
-      "Popup: Data doesn't have the expected structure, attempting to fix"
-    );
-
-    // If data itself is an array, wrap it
-    if (Array.isArray(data)) {
-      console.log("Popup: Data is an array, wrapping it");
-      processedData = { data: data };
-    } else if (typeof data === "object") {
-      // Look for arrays in the data
-      let foundArray = false;
-      for (const key in data) {
-        if (Array.isArray(data[key])) {
-          console.log(`Popup: Found array in key "${key}"`);
-          processedData = { data: data[key] };
-          foundArray = true;
-          break;
-        }
-      }
-
-      if (!foundArray) {
-        console.log("Popup: Could not find any arrays in the data");
-        if (totalLeadsSpan) totalLeadsSpan.textContent = "0";
-        if (exportCSVBtn) exportCSVBtn.disabled = true;
-        if (exportExcelBtn) exportExcelBtn.disabled = true;
-        if (clearDataBtn) clearDataBtn.disabled = true;
-        return;
-      }
-    } else {
-      console.log("Popup: Data is not an object or array");
+    // Check if we have valid data
+    if (!data) {
+      console.log("Popup: No data available");
       if (totalLeadsSpan) totalLeadsSpan.textContent = "0";
       if (exportCSVBtn) exportCSVBtn.disabled = true;
       if (exportExcelBtn) exportExcelBtn.disabled = true;
       if (clearDataBtn) clearDataBtn.disabled = true;
+
+      // Show empty table message if table exists
+      if (leadsTable) {
+        leadsTable.innerHTML =
+          '<tr><td colspan="5" class="no-leads-message">No leads available. Click refresh to fetch leads.</td></tr>';
+      }
+
       return;
     }
-  }
 
-  const leads = processedData.data;
-  console.log("Popup: Found leads array with length:", leads.length);
+    // Ensure data has the expected structure
+    let processedData = data;
+    if (!data.data || !Array.isArray(data.data)) {
+      console.log(
+        "Popup: Data doesn't have the expected structure, attempting to fix"
+      );
 
-  if (leads.length === 0) {
-    if (totalLeadsSpan) totalLeadsSpan.textContent = "0";
-    if (exportCSVBtn) exportCSVBtn.disabled = true;
-    if (exportExcelBtn) exportExcelBtn.disabled = true;
-    if (clearDataBtn) clearDataBtn.disabled = true;
-    return;
-  }
+      // If data itself is an array, wrap it
+      if (Array.isArray(data)) {
+        console.log("Popup: Data is an array, wrapping it");
+        processedData = { data: data };
+      } else if (typeof data === "object") {
+        // Look for arrays in the data
+        let foundArray = false;
+        for (const key in data) {
+          if (Array.isArray(data[key])) {
+            console.log(`Popup: Found array in key "${key}"`);
+            processedData = { data: data[key] };
+            foundArray = true;
+            break;
+          }
+        }
 
-  // Enable export buttons
-  if (exportCSVBtn) exportCSVBtn.disabled = false;
-  if (exportExcelBtn) exportExcelBtn.disabled = false;
-  if (clearDataBtn) clearDataBtn.disabled = false;
+        if (!foundArray) {
+          console.log("Popup: Could not find any arrays in the data");
+          if (totalLeadsSpan) totalLeadsSpan.textContent = "0";
+          if (exportCSVBtn) exportCSVBtn.disabled = true;
+          if (exportExcelBtn) exportExcelBtn.disabled = true;
+          if (clearDataBtn) clearDataBtn.disabled = true;
 
-  if (totalLeadsSpan) totalLeadsSpan.textContent = leads.length;
+          // Show empty table message if table exists
+          if (leadsTable) {
+            leadsTable.innerHTML =
+              '<tr><td colspan="5" class="no-leads-message">No leads found in the data.</td></tr>';
+          }
 
-  // Update the table display with the leads data
-  const leadsTable = document.getElementById("leadsTable");
-  if (leadsTable) {
-    // Clear existing table content
-    leadsTable.innerHTML = "";
+          return;
+        }
+      } else {
+        console.log("Popup: Data is not an object or array");
+        if (totalLeadsSpan) totalLeadsSpan.textContent = "0";
+        if (exportCSVBtn) exportCSVBtn.disabled = true;
+        if (exportExcelBtn) exportExcelBtn.disabled = true;
+        if (clearDataBtn) clearDataBtn.disabled = true;
 
-    // Create table header
-    const headerRow = document.createElement("tr");
-    const headers = ["Product", "Customer", "Contact", "City", "Lead Date"];
+        // Show empty table message if table exists
+        if (leadsTable) {
+          leadsTable.innerHTML =
+            '<tr><td colspan="5" class="no-leads-message">Invalid data format.</td></tr>';
+        }
 
-    headers.forEach((header) => {
-      const th = document.createElement("th");
-      th.textContent = header;
-      headerRow.appendChild(th);
-    });
-
-    leadsTable.appendChild(headerRow);
-
-    // Add data rows (limit to first 10 for performance)
-    const displayLimit = Math.min(leads.length, 10);
-    for (let i = 0; i < displayLimit; i++) {
-      const lead = leads[i];
-      const row = document.createElement("tr");
-
-      // Add cells for each column
-      const product = document.createElement("td");
-      product.textContent = lead.contact_last_product || "";
-      row.appendChild(product);
-
-      const customer = document.createElement("td");
-      customer.textContent = lead.contacts_name || lead.contact_name || "";
-      row.appendChild(customer);
-
-      const contact = document.createElement("td");
-      contact.textContent = lead.contacts_mobile1 || lead.contact_mobile1 || "";
-      row.appendChild(contact);
-
-      const city = document.createElement("td");
-      city.textContent = lead.contact_city || "";
-      row.appendChild(city);
-
-      const date = document.createElement("td");
-      date.textContent = lead.last_contact_date || "";
-      row.appendChild(date);
-
-      leadsTable.appendChild(row);
+        return;
+      }
     }
 
-    // Add a message if there are more leads than displayed
-    if (leads.length > displayLimit) {
-      const infoRow = document.createElement("tr");
-      const infoCell = document.createElement("td");
-      infoCell.colSpan = 5;
-      infoCell.textContent = `Showing ${displayLimit} of ${leads.length} leads. Export to see all.`;
-      infoCell.style.textAlign = "center";
-      infoCell.style.fontStyle = "italic";
-      infoRow.appendChild(infoCell);
-      leadsTable.appendChild(infoRow);
-    }
-  }
+    // Ensure we have a data array
+    const leads = processedData.data || [];
+    console.log("Popup: Found leads array with length:", leads.length);
 
-  // Store the current data for export (if it's not already set)
-  if (!window.currentLeadsData) {
+    if (leads.length === 0) {
+      if (totalLeadsSpan) totalLeadsSpan.textContent = "0";
+      if (exportCSVBtn) exportCSVBtn.disabled = true;
+      if (exportExcelBtn) exportExcelBtn.disabled = true;
+      if (clearDataBtn) clearDataBtn.disabled = true;
+
+      // Show empty table message if table exists
+      if (leadsTable) {
+        leadsTable.innerHTML =
+          '<tr><td colspan="5" class="no-leads-message">No leads found.</td></tr>';
+      }
+
+      return;
+    }
+
+    // Enable export buttons
+    if (exportCSVBtn) exportCSVBtn.disabled = false;
+    if (exportExcelBtn) exportExcelBtn.disabled = false;
+    if (clearDataBtn) clearDataBtn.disabled = false;
+
+    if (totalLeadsSpan) totalLeadsSpan.textContent = leads.length;
+
+    // Update the table display with the leads data
+    if (leadsTable) {
+      try {
+        // Clear existing table content
+        leadsTable.innerHTML = "";
+
+        // Create table header
+        const headerRow = document.createElement("tr");
+        const headers = ["Product", "Customer", "Contact", "City", "Lead Date"];
+
+        headers.forEach((header) => {
+          const th = document.createElement("th");
+          th.textContent = header;
+          headerRow.appendChild(th);
+        });
+
+        leadsTable.appendChild(headerRow);
+
+        // Calculate pagination
+        const totalPages = Math.ceil(leads.length / leadsPerPage);
+        const currentPage = Math.min(Math.max(1, page), totalPages);
+        const startIndex = (currentPage - 1) * leadsPerPage;
+        const endIndex = Math.min(startIndex + leadsPerPage, leads.length);
+
+        // Add data rows for the current page
+        for (let i = startIndex; i < endIndex; i++) {
+          const lead = leads[i];
+          if (!lead) continue; // Skip if lead is null or undefined
+
+          const row = document.createElement("tr");
+
+          // Add cells for each column
+          const product = document.createElement("td");
+          product.textContent = lead.contact_last_product || "";
+          row.appendChild(product);
+
+          const customer = document.createElement("td");
+          customer.textContent = lead.contacts_name || lead.contact_name || "";
+          row.appendChild(customer);
+
+          const contact = document.createElement("td");
+          contact.textContent =
+            lead.contacts_mobile1 || lead.contact_mobile1 || "";
+          row.appendChild(contact);
+
+          const city = document.createElement("td");
+          city.textContent = lead.contact_city || "";
+          row.appendChild(city);
+
+          const date = document.createElement("td");
+          date.textContent = lead.last_contact_date || "";
+          row.appendChild(date);
+
+          leadsTable.appendChild(row);
+        }
+
+        // Add pagination controls if needed
+        if (totalPages > 1) {
+          const paginationRow = document.createElement("tr");
+          const paginationCell = document.createElement("td");
+          paginationCell.colSpan = 5;
+          paginationCell.className = "pagination-controls";
+
+          // Create pagination info
+          const paginationInfo = document.createElement("div");
+          paginationInfo.className = "pagination-info";
+          paginationInfo.textContent = `Showing ${
+            startIndex + 1
+          }-${endIndex} of ${
+            leads.length
+          } leads (Page ${currentPage}/${totalPages})`;
+          paginationCell.appendChild(paginationInfo);
+
+          // Create pagination buttons
+          const paginationButtons = document.createElement("div");
+          paginationButtons.className = "pagination-buttons";
+
+          // Previous button
+          if (currentPage > 1) {
+            const prevButton = document.createElement("button");
+            prevButton.textContent = "Previous";
+            prevButton.className = "pagination-button";
+            prevButton.addEventListener("click", () =>
+              updateLeadsDisplay(processedData, currentPage - 1)
+            );
+            paginationButtons.appendChild(prevButton);
+          }
+
+          // Page number buttons (show up to 5 pages)
+          const pageButtonsStart = Math.max(1, currentPage - 2);
+          const pageButtonsEnd = Math.min(totalPages, pageButtonsStart + 4);
+
+          for (let i = pageButtonsStart; i <= pageButtonsEnd; i++) {
+            const pageButton = document.createElement("button");
+            pageButton.textContent = i.toString();
+            pageButton.className =
+              i === currentPage
+                ? "pagination-button current"
+                : "pagination-button";
+            pageButton.addEventListener("click", () =>
+              updateLeadsDisplay(processedData, i)
+            );
+            paginationButtons.appendChild(pageButton);
+          }
+
+          // Next button
+          if (currentPage < totalPages) {
+            const nextButton = document.createElement("button");
+            nextButton.textContent = "Next";
+            nextButton.className = "pagination-button";
+            nextButton.addEventListener("click", () =>
+              updateLeadsDisplay(processedData, currentPage + 1)
+            );
+            paginationButtons.appendChild(nextButton);
+          }
+
+          paginationCell.appendChild(paginationButtons);
+          paginationRow.appendChild(paginationCell);
+          leadsTable.appendChild(paginationRow);
+        } else {
+          // If only one page, show the total
+          const infoRow = document.createElement("tr");
+          const infoCell = document.createElement("td");
+          infoCell.colSpan = 5;
+          infoCell.textContent = `Showing all ${leads.length} leads`;
+          infoCell.style.textAlign = "center";
+          infoCell.style.fontStyle = "italic";
+          infoRow.appendChild(infoCell);
+          leadsTable.appendChild(infoRow);
+        }
+      } catch (tableError) {
+        console.error("Error updating leads table:", tableError);
+        leadsTable.innerHTML =
+          '<tr><td colspan="5" class="no-leads-message">Error displaying leads: ' +
+          tableError.message +
+          "</td></tr>";
+      }
+    }
+
+    // Store the current data for export
     window.currentLeadsData = processedData;
+    console.log("Popup: Updated window.currentLeadsData");
+  } catch (error) {
+    console.error("Error in updateLeadsDisplay:", error);
+    // Try to show error in the UI if possible
+    try {
+      const totalLeadsSpan = document.getElementById("totalLeads");
+      const leadsTable = document.getElementById("leadsTable");
+
+      if (totalLeadsSpan) totalLeadsSpan.textContent = "Error";
+      if (leadsTable) {
+        leadsTable.innerHTML =
+          '<tr><td colspan="5" class="no-leads-message">Error updating display: ' +
+          error.message +
+          "</td></tr>";
+      }
+    } catch (uiError) {
+      console.error("Could not update UI with error:", uiError);
+    }
   }
 }
 
@@ -790,82 +917,129 @@ function handleTransferConfirm() {
   transferToGoogleSheets();
 }
 
-// Function to refresh data from IndiaMart
+// Function to refresh data
 function refreshData() {
   console.log("Popup: refreshData called");
 
-  // Debug: Check if window.currentLeadsData exists before refresh
-  console.log(
-    "Popup: Before refresh - window.currentLeadsData:",
-    window.currentLeadsData
-  );
-
-  // Show spinning animation on refresh button
+  // Show the refresh animation
   const refreshBtn = document.getElementById("refreshData");
   if (refreshBtn) {
     refreshBtn.classList.add("spinning");
   }
 
-  // Send message to content script to fetch fresh data
+  // Initialize progress UI
+  try {
+    updateProgressUI({
+      status: "starting",
+      totalLeads: 0,
+      fetchedLeads: 0,
+    });
+  } catch (error) {
+    console.error("Error initializing progress UI:", error);
+  }
+
+  // Get the active tab
   chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-    // Check if we're on the IndiaMart page
-    if (
-      tabs[0] &&
-      tabs[0].url &&
-      tabs[0].url.includes("seller.indiamart.com")
-    ) {
-      // We're on the IndiaMart page, send message to content script
-      chrome.tabs.sendMessage(
-        tabs[0].id,
-        { action: "fetchLeadData", forceFetch: true },
-        function (response) {
-          if (response && response.status === "fetching") {
-            console.log("Popup: Refresh initiated, waiting for data...");
-            // The data will come through the message listener
-          } else {
-            console.log("Popup: Failed to initiate refresh");
-            if (refreshBtn) {
-              refreshBtn.classList.remove("spinning");
-            }
+    if (!tabs || !tabs[0] || !tabs[0].id) {
+      console.error("Popup: Could not get active tab");
 
-            // Even if refresh failed, try to load from storage
-            loadDataFromStorage();
+      // Update progress indicator to show error
+      try {
+        updateProgressUI({
+          status: "error",
+          error: "Could not get active tab",
+        });
+      } catch (error) {
+        console.error("Error updating progress UI:", error);
+      }
 
-            alert(
-              "Failed to refresh data from the page. Loading from storage instead."
-            );
-          }
-        }
-      );
-    } else {
-      // We're not on the IndiaMart page
-      console.log("Popup: Not on IndiaMart page, fetching from storage");
-      // Just reload from storage
-      loadDataFromStorage();
-
+      // Stop spinning animation
       if (refreshBtn) {
         refreshBtn.classList.remove("spinning");
       }
 
-      // Enable buttons if we have data in storage
-      chrome.storage.local.get("indiamartLeads", function (result) {
-        console.log("Popup: Checking storage after refresh:", result);
-        if (result.indiamartLeads) {
-          const exportCSVBtn = document.getElementById("exportCSV");
-          const exportExcelBtn = document.getElementById("exportExcel");
-          const clearDataBtn = document.getElementById("clearData");
+      return;
+    }
 
-          if (exportCSVBtn) exportCSVBtn.disabled = false;
-          if (exportExcelBtn) exportExcelBtn.disabled = false;
-          if (clearDataBtn) clearDataBtn.disabled = false;
+    const activeTab = tabs[0];
+    console.log("Popup: Active tab:", activeTab.url);
 
-          // Debug: Check window.currentLeadsData after loading from storage
-          console.log(
-            "Popup: After refresh (not on IndiaMart) - window.currentLeadsData:",
-            window.currentLeadsData
-          );
+    // Check if we're on an IndiaMart page
+    if (!activeTab.url || !activeTab.url.includes("indiamart.com")) {
+      console.log("Popup: Not on an IndiaMart page");
+      alert("Please navigate to an IndiaMart page to extract leads.");
+
+      // Update progress indicator to show error
+      try {
+        updateProgressUI({
+          status: "error",
+          error: "Not on an IndiaMart page",
+        });
+      } catch (error) {
+        console.error("Error updating progress UI:", error);
+      }
+
+      // Stop spinning animation
+      if (refreshBtn) {
+        refreshBtn.classList.remove("spinning");
+      }
+
+      return;
+    }
+
+    // Send a message to the content script to extract data
+    try {
+      chrome.tabs.sendMessage(
+        activeTab.id,
+        { action: "EXTRACT_LEADS", isRefresh: true },
+        function (response) {
+          if (chrome.runtime.lastError) {
+            console.error(
+              "Popup: Error sending message to content script:",
+              chrome.runtime.lastError
+            );
+
+            // Update progress indicator to show error
+            try {
+              updateProgressUI({
+                status: "error",
+                error: "Content script not available. Please refresh the page.",
+              });
+            } catch (error) {
+              console.error("Error updating progress UI:", error);
+            }
+
+            // Stop spinning animation
+            if (refreshBtn) {
+              refreshBtn.classList.remove("spinning");
+            }
+
+            return;
+          }
+
+          console.log("Popup: Content script response:", response);
+
+          // Note: We don't need to do anything else here because the background script
+          // will send us a NEW_LEADS message when the data is ready
         }
-      });
+      );
+    } catch (error) {
+      console.error("Popup: Error sending message to content script:", error);
+
+      // Update progress indicator to show error
+      try {
+        updateProgressUI({
+          status: "error",
+          error: error.message || "Error communicating with page",
+        });
+      } catch (error) {
+        console.error("Error updating progress UI:", error);
+      }
+
+      // Stop spinning animation
+      if (refreshBtn) {
+        refreshBtn.classList.remove("spinning");
+      }
     }
   });
 }
@@ -1177,18 +1351,33 @@ function checkSheetJSLibrary() {
 document.addEventListener("DOMContentLoaded", function () {
   console.log("Popup: DOM Content Loaded");
 
-  // Check Chrome APIs
-  checkChromeAPIs();
-
-  // Check if SheetJS library is loaded
-  checkSheetJSLibrary();
-
   try {
-    // Check if all elements exist
-    const elements = ["exportCSV", "exportExcel", "clearData"];
+    // Initialize the progress container
+    const progressContainer = document.getElementById("progressContainer");
+    if (progressContainer) {
+      progressContainer.style.display = "none";
+    } else {
+      console.warn("Popup: Progress container element not found");
+    }
+
+    // Check Chrome APIs
+    checkChromeAPIs();
+
+    // Check if SheetJS library is loaded
+    checkSheetJSLibrary();
+
+    // Check if all required elements exist
+    const requiredElements = [
+      "totalLeads",
+      "exportCSV",
+      "exportExcel",
+      "clearData",
+      "refreshData",
+      "leadsTable",
+    ];
 
     const missingElements = [];
-    elements.forEach((id) => {
+    requiredElements.forEach((id) => {
       const element = document.getElementById(id);
       if (!element) {
         missingElements.push(id);
@@ -1201,108 +1390,383 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     // Load initial data
-    loadDataFromStorage();
+    try {
+      loadDataFromStorage();
+    } catch (error) {
+      console.error("Popup: Error loading data from storage:", error);
 
-    // Listen for updates from background script
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-      console.log("Popup: Received message type:", message.type);
+      // Try to update the UI to show the error
+      try {
+        const totalLeadsSpan = document.getElementById("totalLeads");
+        const leadsTable = document.getElementById("leadsTable");
 
-      if (message.type === "NEW_LEADS") {
-        console.log("Popup: Received NEW_LEADS message");
-
-        // Process the data
-        try {
-          // Check if data is too large for logging
-          const dataSize = JSON.stringify(message.data).length;
-          console.log(`Popup: Received data size: ${dataSize} bytes`);
-
-          if (dataSize > 50000) {
-            console.log("Popup: Data too large to log completely");
-          } else {
-            console.log("Popup: Received data:", message.data);
-          }
-
-          const processedData = processLeadData(message.data);
-          console.log("Popup: Processed message data");
-
-          // Set the global variable
-          window.currentLeadsData = processedData;
-          console.log("Popup: Set window.currentLeadsData from message");
-
-          // Stop spinning animation on refresh button
-          const refreshBtn = document.getElementById("refreshData");
-          if (refreshBtn) {
-            refreshBtn.classList.remove("spinning");
-          }
-
-          // Update the display
-          updateLeadsDisplay();
-
-          // Explicitly enable buttons
-          const exportCSVBtn = document.getElementById("exportCSV");
-          const exportExcelBtn = document.getElementById("exportExcel");
-          const clearDataBtn = document.getElementById("clearData");
-
-          if (exportCSVBtn) exportCSVBtn.disabled = false;
-          if (exportExcelBtn) exportExcelBtn.disabled = false;
-          if (clearDataBtn) clearDataBtn.disabled = false;
-
-          // Send an immediate response
-          sendResponse({ status: "received" });
-        } catch (error) {
-          console.error("Popup: Error processing message data:", error);
-          alert("Error processing received data: " + error.message);
-          sendResponse({ status: "error", message: error.message });
+        if (totalLeadsSpan) totalLeadsSpan.textContent = "Error";
+        if (leadsTable) {
+          leadsTable.innerHTML =
+            '<tr><td colspan="5" class="no-leads-message">Error loading data: ' +
+            error.message +
+            "</td></tr>";
         }
-
-        return true; // Keep the message channel open for async response
+      } catch (uiError) {
+        console.error("Popup: Could not update UI with error:", uiError);
       }
-    });
+    }
 
     // Add event listeners with error handling
     function addClickListener(id, handler) {
-      const element = document.getElementById(id);
-      if (element) {
-        console.log(`Popup: Adding click listener to ${id}`);
-        element.addEventListener("click", function (event) {
-          console.log(`Popup: ${id} clicked`);
-          try {
-            handler(event);
-          } catch (error) {
-            console.error(`Popup: Error in ${id} click handler:`, error);
-            alert(`Error in ${id} handler: ${error.message}`);
-          }
-        });
-      } else {
+      try {
+        const element = document.getElementById(id);
+        if (element) {
+          console.log(`Popup: Adding click listener to ${id}`);
+          element.addEventListener("click", function (event) {
+            console.log(`Popup: ${id} clicked`);
+            try {
+              handler(event);
+            } catch (error) {
+              console.error(`Popup: Error in ${id} click handler:`, error);
+
+              // Show error in UI
+              try {
+                if (id === "refreshData") {
+                  // Stop spinning animation if it's the refresh button
+                  element.classList.remove("spinning");
+
+                  // Show error in progress UI
+                  updateProgressUI({
+                    status: "error",
+                    error: error.message || `Error in ${id} handler`,
+                  });
+                } else {
+                  // For other buttons, show an alert
+                  alert(`Error in ${id} handler: ${error.message}`);
+                }
+              } catch (uiError) {
+                console.error(
+                  "Popup: Could not update UI with error:",
+                  uiError
+                );
+                alert(`Error in ${id} handler: ${error.message}`);
+              }
+            }
+          });
+        } else {
+          console.error(
+            `Popup: Cannot add listener to ${id} - element not found`
+          );
+        }
+      } catch (error) {
         console.error(
-          `Popup: Cannot add listener to ${id} - element not found`
+          `Popup: Error setting up click listener for ${id}:`,
+          error
         );
       }
     }
 
-    // Add event listeners for the three buttons
+    // Add event listeners for the buttons
     addClickListener("exportCSV", exportAsCSV);
     addClickListener("exportExcel", exportAsExcel);
     addClickListener("clearData", clearStoredData);
-
-    // Add event listener for the refresh button in the header
     addClickListener("refreshData", refreshData);
-
-    // Update the data retrieval to enable buttons
-    chrome.storage.local.get("indiamartLeads", function (result) {
-      console.log("Popup: Checking storage for enabling buttons:", result);
-      if (result.indiamartLeads) {
-        const exportCSVBtn = document.getElementById("exportCSV");
-        const exportExcelBtn = document.getElementById("exportExcel");
-        const clearDataBtn = document.getElementById("clearData");
-
-        if (exportCSVBtn) exportCSVBtn.disabled = false;
-        if (exportExcelBtn) exportExcelBtn.disabled = false;
-        if (clearDataBtn) clearDataBtn.disabled = false;
-      }
-    });
   } catch (error) {
-    console.error("Popup: Error in DOMContentLoaded handler:", error);
-    alert(`Error initializing popup: ${error.message}`);
+    console.error("Popup: Error during initialization:", error);
+    alert("Error initializing extension popup: " + error.message);
+  }
+});
+
+// Function to update the progress UI
+function updateProgressUI(progressData) {
+  if (!progressData) return;
+
+  // Get all required DOM elements
+  const progressContainer = document.getElementById("progressContainer");
+  const progressStatus = document.getElementById("progressStatus");
+  const progressDetails = document.getElementById("progressDetails");
+  const progressBar = document.getElementById("progressBar");
+  const progressLeadCount = document.getElementById("progressLeadCount");
+  const progressTotalLeads = document.getElementById("progressTotalLeads");
+
+  // Check if all required elements exist
+  if (!progressContainer) {
+    console.error("Popup: Missing progressContainer element");
+    return;
+  }
+
+  // Show the progress container
+  progressContainer.style.display = "block";
+
+  // Remove any previous state classes
+  progressContainer.classList.remove("error", "success");
+
+  // Update status text based on the status
+  let statusText = "Processing...";
+  switch (progressData.status) {
+    case "starting":
+      statusText = "Initializing...";
+      break;
+    case "counting":
+      statusText = "Counting leads...";
+      break;
+    case "fetching":
+      statusText = "Fetching leads...";
+      break;
+    case "processing":
+      statusText = "Processing data...";
+      break;
+    case "sending":
+      statusText = "Saving data...";
+      break;
+    case "complete":
+      statusText = "Complete!";
+      if (progressContainer) progressContainer.classList.add("success");
+      break;
+    case "error":
+      statusText = "Error";
+      if (progressContainer) progressContainer.classList.add("error");
+      break;
+    case "fallback":
+      statusText = "Using fallback method...";
+      break;
+    case "checking_window_object":
+      statusText = "Checking window data...";
+      break;
+    case "checking_dom":
+      statusText = "Checking page content...";
+      break;
+    case "extracting_dom":
+      statusText = "Extracting from page...";
+      break;
+    case "no_leads_found":
+      statusText = "No leads found";
+      break;
+    default:
+      statusText = progressData.status || "Processing...";
+  }
+
+  // Safely update status text
+  if (progressStatus) {
+    progressStatus.textContent = statusText;
+  }
+
+  // Safely update error details if present
+  if (progressDetails) {
+    if (progressData.status === "error" && progressData.error) {
+      progressDetails.textContent = progressData.error;
+    } else if (progressData.source) {
+      let sourceText = "";
+      switch (progressData.source) {
+        case "api":
+          sourceText = "Using API";
+          break;
+        case "window_object":
+          sourceText = "From page data";
+          break;
+        case "dom":
+          sourceText = "From page elements";
+          break;
+        case "fallback":
+          sourceText = "Using fallback";
+          break;
+        default:
+          sourceText = progressData.source;
+      }
+      progressDetails.textContent = sourceText;
+    } else {
+      progressDetails.textContent = "";
+    }
+  }
+
+  // Update progress bar
+  if (progressBar && progressData.totalLeads && progressData.totalLeads > 0) {
+    // Update the total leads count
+    if (progressTotalLeads) {
+      progressTotalLeads.textContent = progressData.totalLeads;
+    }
+
+    // Calculate progress percentage
+    let percentage = 0;
+
+    if (progressData.completedBatches && progressData.totalBatches) {
+      // If we have batch information, use that for the progress bar
+      percentage =
+        (progressData.completedBatches / progressData.totalBatches) * 100;
+    } else if (progressData.fetchedLeads) {
+      // Otherwise use fetched leads count
+      percentage = (progressData.fetchedLeads / progressData.totalLeads) * 100;
+    }
+
+    // Update the progress bar width
+    progressBar.style.width = `${Math.min(percentage, 100)}%`;
+
+    // Update the fetched leads count
+    if (progressLeadCount && progressData.fetchedLeads !== undefined) {
+      progressLeadCount.textContent = progressData.fetchedLeads;
+    }
+  } else if (
+    progressBar &&
+    (progressData.status === "complete" || progressData.status === "error")
+  ) {
+    // If complete or error, set the progress bar accordingly
+    progressBar.style.width =
+      progressData.status === "complete" ? "100%" : "100%";
+
+    if (
+      progressLeadCount &&
+      progressTotalLeads &&
+      progressData.fetchedLeads !== undefined
+    ) {
+      progressLeadCount.textContent = progressData.fetchedLeads;
+      progressTotalLeads.textContent = progressData.fetchedLeads;
+    }
+  }
+}
+
+// Function to update statistics in the UI
+function updateStats(data) {
+  try {
+    if (!data || !data.data) {
+      console.log("Popup: No data available for stats update");
+      return;
+    }
+
+    // Update total leads count
+    const totalLeadsSpan = document.getElementById("totalLeads");
+    if (totalLeadsSpan) {
+      totalLeadsSpan.textContent = data.data.length.toString();
+    }
+
+    // Update timestamp if available
+    if (data.timestamp) {
+      const timestampElem = document.getElementById("lastUpdated");
+      if (timestampElem) {
+        const date = new Date(data.timestamp);
+        timestampElem.textContent = date.toLocaleString();
+      }
+    }
+
+    // Update source if available
+    if (data.source) {
+      const sourceElem = document.getElementById("dataSource");
+      if (sourceElem) {
+        sourceElem.textContent = data.source;
+      }
+    }
+
+    // Enable export buttons
+    const exportCSVBtn = document.getElementById("exportCSV");
+    const exportExcelBtn = document.getElementById("exportExcel");
+    const clearDataBtn = document.getElementById("clearData");
+
+    if (exportCSVBtn) exportCSVBtn.disabled = false;
+    if (exportExcelBtn) exportExcelBtn.disabled = false;
+    if (clearDataBtn) clearDataBtn.disabled = false;
+
+    console.log("Popup: Stats updated successfully");
+  } catch (error) {
+    console.error("Popup: Error updating stats:", error);
+  }
+}
+
+// Listen for updates from background script
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log("Popup: Received message type:", message.type);
+
+  if (message.type === "NEW_LEADS") {
+    console.log("Popup: Received NEW_LEADS message");
+
+    // Process the data
+    try {
+      // Check if data is too large for logging
+      const dataSize = JSON.stringify(message.data).length;
+      console.log(`Popup: Received data size: ${dataSize} bytes`);
+
+      // Check if this is partial data
+      if (message.isPartialData) {
+        console.log(
+          `Popup: Received partial data. Original size: ${message.originalSize} bytes`
+        );
+
+        // Show a warning to the user
+        const warningDiv = document.createElement("div");
+        warningDiv.className = "alert alert-warning";
+        warningDiv.innerHTML = `
+          <strong>Warning:</strong> Only showing a preview of ${message.data.data.length} leads. 
+          The full dataset (${message.data.totalLeads} leads) is too large to display in the popup.
+          Please use the export function to access all leads.
+        `;
+
+        // Insert at the top of the content area
+        const contentArea = document.querySelector(".content-area");
+        if (contentArea && contentArea.firstChild) {
+          contentArea.insertBefore(warningDiv, contentArea.firstChild);
+        }
+      }
+
+      if (dataSize > 50000) {
+        console.log("Popup: Data too large to log completely");
+      } else {
+        console.log("Popup: Received data:", message.data);
+      }
+
+      const processedData = processLeadData(message.data);
+      console.log("Popup: Processed message data");
+
+      // Set the global variable
+      window.currentLeadsData = processedData;
+      console.log("Popup: Set window.currentLeadsData from message");
+
+      // Stop spinning animation on refresh button
+      const refreshBtn = document.getElementById("refreshData");
+      if (refreshBtn) {
+        refreshBtn.classList.remove("spinning");
+        refreshBtn.disabled = false;
+      }
+
+      // Update the UI with the new data
+      updateLeadsDisplay(processedData);
+
+      // Send a response back
+      sendResponse({
+        status: "success",
+        message: "Data received and processed",
+      });
+    } catch (error) {
+      console.error("Popup: Error processing lead data:", error);
+
+      // Show error message to user
+      const errorDiv = document.createElement("div");
+      errorDiv.className = "alert alert-danger";
+      errorDiv.textContent = `Error processing data: ${error.message}`;
+
+      // Insert at the top of the content area
+      const contentArea = document.querySelector(".content-area");
+      if (contentArea && contentArea.firstChild) {
+        contentArea.insertBefore(errorDiv, contentArea.firstChild);
+      }
+
+      sendResponse({ status: "error", message: error.message });
+    }
+
+    return true; // Keep the message channel open for async response
+  }
+
+  // Handle progress updates
+  else if (message.type === "FETCH_PROGRESS_UPDATE") {
+    console.log("Popup: Received progress update:", message.data);
+
+    try {
+      // Update the progress UI
+      updateProgressUI(message.data);
+
+      // Send response
+      sendResponse({ status: "success", message: "Progress update received" });
+    } catch (error) {
+      console.error("Popup: Error handling progress update:", error);
+      sendResponse({
+        status: "error",
+        message: "Error handling progress update: " + error.message,
+      });
+    }
+
+    return true; // Keep the message channel open for async response
   }
 });
