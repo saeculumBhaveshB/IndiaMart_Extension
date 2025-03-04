@@ -2,9 +2,10 @@
 <html>
 <head>
   <title>IndiaMart Lead Manager</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
   <style>
     body {
-      width: 400px;
+      width: 350px;
       padding: 15px;
       font-family: Arial, sans-serif;
     }
@@ -20,41 +21,52 @@
       color: #666;
       font-size: 14px;
       margin-top: 5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
-    #leadsList {
-      max-height: 400px;
-      overflow-y: auto;
+    .refresh-btn {
+      background-color: transparent;
+      border: none;
+      color: #4285f4;
+      cursor: pointer;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
     }
-    .lead-item {
-      padding: 10px;
-      border: 1px solid #eee;
-      margin-bottom: 10px;
-      border-radius: 4px;
+    .refresh-btn svg {
+      width: 18px;
+      height: 18px;
+      fill: #4285f4;
     }
-    .lead-item:hover {
-      background-color: #f9f9f9;
+    .refresh-btn:hover svg {
+      fill: #3367d6;
     }
-    .no-leads {
-      color: #666;
-      text-align: center;
-      padding: 20px;
+    .refresh-btn.spinning svg {
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
     }
     .button-container {
       display: flex;
-      justify-content: space-between;
+      flex-direction: column;
+      gap: 12px;
       margin-top: 15px;
-      flex-wrap: wrap;
-      gap: 10px;
     }
     button {
-      padding: 8px 15px;
+      padding: 12px 15px;
       background-color: #4285f4;
       color: white;
       border: none;
       border-radius: 4px;
       cursor: pointer;
-      flex: 1;
-      min-width: 120px;
+      font-size: 14px;
+      font-weight: bold;
     }
     button:hover {
       background-color: #3367d6;
@@ -72,21 +84,42 @@
     #transferSheets:disabled {
       background-color: #ccc;
     }
+    #clearData {
+      background-color: #db4437; /* Google red color */
+    }
+    #clearData:hover {
+      background-color: #c53929;
+    }
+    #exportExcel {
+      background-color: #107c41; /* Excel green color */
+    }
+    #exportExcel:hover {
+      background-color: #0c5e31;
+    }
+    #exportExcel:disabled {
+      background-color: #ccc;
+    }
     .sheet-url-container {
       margin-top: 15px;
       display: none;
+      padding: 15px;
+      background-color: #f8f9fa;
+      border-radius: 4px;
+      border: 1px solid #e0e0e0;
     }
-    #sheetUrl {
+    #sheetUrl, #scriptId {
       width: 100%;
       padding: 8px;
       margin-bottom: 10px;
       border: 1px solid #ccc;
       border-radius: 4px;
+      font-size: 13px;
     }
     .sheet-url-container label {
       display: block;
       margin-bottom: 5px;
       font-weight: bold;
+      font-size: 13px;
     }
     .info-text {
       font-size: 12px;
@@ -94,31 +127,123 @@
       margin-top: 5px;
       margin-bottom: 10px;
     }
+    #confirmTransfer {
+      width: 100%;
+      margin-top: 10px;
+    }
+    #directUpload {
+      background-color: #0f9d58;
+      font-size: 15px;
+      padding: 14px 15px;
+    }
+    #directUpload:hover {
+      background-color: #0b8043;
+    }
+    /* Refresh button animation */
+    #refreshData {
+      transition: transform 0.3s ease;
+    }
+    
+    #refreshData.spinning {
+      animation: spin 1s linear infinite;
+    }
+    
+    /* Leads table styles */
+    .leads-table-container {
+      margin-top: 15px;
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+    }
+    
+    #leadsTable {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    
+    #leadsTable th {
+      background-color: #f8f9fa;
+      padding: 8px;
+      text-align: left;
+      font-weight: bold;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    
+    #leadsTable td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #f0f0f0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100px;
+    }
+    
+    #leadsTable tr:nth-child(even) {
+      background-color: #f8f9fa;
+    }
+    
+    #leadsTable tr:hover {
+      background-color: #e8f0fe;
+    }
+    
+    .no-leads-message {
+      padding: 15px;
+      text-align: center;
+      color: #666;
+      font-style: italic;
+    }
   </style>
 </head>
 <body>
   <div class="header">
     <h2>IndiaMart Leads</h2>
-    <div class="lead-count">Total Leads: <span id="totalLeads">0</span></div>
+    <div class="lead-count">
+      <span>Total Leads: <span id="totalLeads">0</span></span>
+      <button id="refreshData" class="refresh-btn" title="Refresh Data">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+          <path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+        </svg>
+      </button>
+    </div>
   </div>
-  <div id="leadsList">
-    <div class="no-leads">No leads captured yet. Please visit the IndiaMart Lead Manager page.</div>
+  
+  <!-- Leads table -->
+  <div class="leads-table-container">
+    <table id="leadsTable">
+      <!-- Table content will be populated by JavaScript -->
+    </table>
   </div>
+  
   <div class="button-container">
     <button id="exportCSV" disabled>Export as CSV</button>
-    <button id="exportJSON" disabled>Export as JSON</button>
-    <button id="transferSheets" disabled>Transfer to Sheets</button>
+    <button id="exportExcel" disabled>Export as Excel</button>
     <button id="clearData" disabled>Clear Data</button>
   </div>
+  
   <div id="sheetUrlContainer" class="sheet-url-container">
     <label for="sheetUrl">Google Sheet URL:</label>
     <input type="text" id="sheetUrl" placeholder="Paste your Google Sheet URL here">
+    
+    <label for="scriptId">Google Apps Script ID:</label>
+    <input type="text" id="scriptId" placeholder="Paste your Script ID here (from the deployment URL)">
     <div class="info-text">
-      Enter the URL of your Google Sheet. The extension will automatically transfer the lead data.
+      The Script ID is the part of your Apps Script URL after /macros/s/ and before /exec
+    </div>
+    
+    <div class="info-text">
+      Enter the URL of your Google Sheet and your Script ID. The extension will directly upload the lead data.
       Make sure your Google Sheet is accessible (not restricted).
     </div>
     <button id="confirmTransfer">Transfer Data</button>
   </div>
+  
+  <!-- Add SheetJS library for Excel export (local version) -->
+  <script src="xlsx.full.min.js"></script>
   <script src="popup.js"></script>
 </body>
 </html> 

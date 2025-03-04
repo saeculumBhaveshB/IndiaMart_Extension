@@ -144,7 +144,7 @@ function interceptFetch() {
           try {
             chrome.runtime.sendMessage(
               {
-                action: "STORE_LEADS_DATA",
+                type: "LEAD_DATA",
                 data: processedData,
               },
               function (response) {
@@ -162,7 +162,7 @@ function interceptFetch() {
               }
             );
           } catch (error) {
-            console.error("Error sending message to background script:", error);
+            console.error("Error sending data to background:", error);
           }
         })
         .catch((err) => {
@@ -239,7 +239,7 @@ function interceptXHR() {
             try {
               chrome.runtime.sendMessage(
                 {
-                  action: "STORE_LEADS_DATA",
+                  type: "LEAD_DATA",
                   data: processedData,
                 },
                 function (response) {
@@ -348,7 +348,7 @@ function fetchLeadData() {
       try {
         chrome.runtime.sendMessage(
           {
-            action: "STORE_LEADS_DATA",
+            type: "LEAD_DATA",
             data: processedData,
           },
           function (response) {
@@ -489,6 +489,179 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ status: "fetching" });
   }
 });
+
+// Listen for messages from the popup
+chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+  console.log("Content script received message:", message);
+
+  if (message.action === "fetchLeadData") {
+    console.log("Content script: Fetching lead data");
+
+    // Send immediate response to let popup know we're working on it
+    sendResponse({ status: "fetching" });
+
+    // Extract lead data from the page
+    const leadData = extractLeadData(message.forceFetch || false);
+
+    // Send the data to the background script
+    chrome.runtime.sendMessage({
+      type: "LEAD_DATA",
+      data: leadData,
+      isRefresh: message.forceFetch || false,
+    });
+
+    return true; // Keep the message channel open for async response
+  }
+});
+
+// Function to extract lead data from the page
+function extractLeadData(isRefresh) {
+  console.log("Content script: Extracting lead data, isRefresh:", isRefresh);
+
+  // This function should extract lead data from the IndiaMart page
+  // The actual implementation will depend on the structure of the IndiaMart page
+
+  // For IndiaMart, we need to look for the lead data in the page
+  // This is a simplified example - you may need to adjust based on the actual page structure
+
+  try {
+    // First, try to find data in the global window object (IndiaMart often stores data here)
+    if (window.leadData || window.LEAD_DATA || window.leads) {
+      const rawData = window.leadData || window.LEAD_DATA || window.leads;
+      console.log("Content script: Found lead data in window object");
+      return {
+        data: Array.isArray(rawData) ? rawData : [rawData],
+        timestamp: new Date().toISOString(),
+        source: "window_object",
+      };
+    }
+
+    // If not found in window object, try to extract from the DOM
+    // Look for tables or divs that might contain lead information
+    const leadElements = document.querySelectorAll(
+      ".lead-item, .lead-row, tr.lead, .lead-container"
+    );
+
+    if (leadElements && leadElements.length > 0) {
+      console.log(
+        `Content script: Found ${leadElements.length} lead elements in DOM`
+      );
+
+      const extractedLeads = [];
+
+      leadElements.forEach((element) => {
+        // Extract data from each lead element
+        // This is a simplified example - adjust selectors based on actual page structure
+        const lead = {
+          contact_last_product: extractText(
+            element,
+            ".product-name, .product, .item-name"
+          ),
+          contacts_name: extractText(
+            element,
+            ".contact-name, .name, .customer-name"
+          ),
+          contacts_mobile1: extractText(
+            element,
+            ".contact-mobile, .mobile, .phone, .contact-number"
+          ),
+          contact_city: extractText(element, ".contact-city, .city, .location"),
+          last_contact_date: extractText(
+            element,
+            ".contact-date, .date, .lead-date"
+          ),
+          last_product_qty: extractText(
+            element,
+            ".product-qty, .quantity, .qty"
+          ),
+          contacts_company: extractText(
+            element,
+            ".company-name, .company, .firm-name"
+          ),
+        };
+
+        // Only add if we have at least some data
+        if (
+          lead.contacts_name ||
+          lead.contacts_mobile1 ||
+          lead.contact_last_product
+        ) {
+          extractedLeads.push(lead);
+        }
+      });
+
+      return {
+        data: extractedLeads,
+        timestamp: new Date().toISOString(),
+        source: "dom_extraction",
+      };
+    }
+
+    // If we still don't have data, try to find it in any script tags
+    // IndiaMart might have the data in a JSON object in a script tag
+    const scripts = document.querySelectorAll("script");
+    for (const script of scripts) {
+      const content = script.textContent;
+      if (
+        content &&
+        (content.includes("leadData") ||
+          content.includes("LEAD_DATA") ||
+          content.includes("leads"))
+      ) {
+        // Try to extract JSON data from the script
+        const matches = content.match(
+          /(?:leadData|LEAD_DATA|leads)\s*=\s*(\[.*?\]|\{.*?\})/s
+        );
+        if (matches && matches[1]) {
+          try {
+            const parsedData = JSON.parse(matches[1]);
+            console.log("Content script: Found lead data in script tag");
+            return {
+              data: Array.isArray(parsedData) ? parsedData : [parsedData],
+              timestamp: new Date().toISOString(),
+              source: "script_tag",
+            };
+          } catch (e) {
+            console.log(
+              "Content script: Error parsing JSON from script tag",
+              e
+            );
+          }
+        }
+      }
+    }
+
+    // If we still don't have data, return an empty result
+    console.log("Content script: No lead data found");
+    return {
+      data: [],
+      timestamp: new Date().toISOString(),
+      source: "no_data_found",
+    };
+  } catch (error) {
+    console.error("Content script: Error extracting lead data", error);
+    return {
+      data: [],
+      timestamp: new Date().toISOString(),
+      source: "error",
+      error: error.message,
+    };
+  }
+}
+
+// Helper function to extract text from an element using multiple possible selectors
+function extractText(parentElement, selectors) {
+  const selectorArray = selectors.split(",").map((s) => s.trim());
+
+  for (const selector of selectorArray) {
+    const element = parentElement.querySelector(selector);
+    if (element && element.textContent) {
+      return element.textContent.trim();
+    }
+  }
+
+  return "";
+}
 
 // Clean up function to remove intervals when the page is unloaded
 window.addEventListener("beforeunload", function () {

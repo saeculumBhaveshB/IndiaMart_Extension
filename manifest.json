@@ -3,10 +3,19 @@
   "name": "IndiaMart Lead Manager",
   "version": "1.0",
   "description": "Captures and stores lead data from IndiaMart Lead Manager",
-  "permissions": ["webRequest", "storage", "scripting", "tabs", "cookies"],
+  "permissions": [
+    "webRequest",
+    "storage",
+    "scripting",
+    "tabs",
+    "cookies",
+    "clipboardWrite",
+    "activeTab"
+  ],
   "host_permissions": [
     "https://seller.indiamart.com/*",
-    "https://docs.google.com/spreadsheets/*"
+    "https://docs.google.com/spreadsheets/*",
+    "https://script.google.com/macros/*"
   ],
   "background": {
     "service_worker": "background.js",
@@ -31,5 +40,11 @@
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["xlsx.full.min.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }
