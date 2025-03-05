@@ -1,32 +1,32 @@
 // Function to ensure data has the correct structure
 function ensureCorrectDataStructure(data) {
-  console.log(
-    "IndiaMart Extension: Ensuring correct data structure in content script"
-  );
+  // console.log(
+  //   "IndiaMart Extension: Ensuring correct data structure in content script"
+  // );
 
   // If data is null or undefined, return an empty structure
   if (!data) {
-    console.log(
-      "IndiaMart Extension: Data is null or undefined, creating empty structure"
-    );
+    // console.log(
+    //   "IndiaMart Extension: Data is null or undefined, creating empty structure"
+    // );
     return { data: [] };
   }
 
   // If data is already in the correct format, return it as is
   if (data.data && Array.isArray(data.data)) {
-    console.log("IndiaMart Extension: Data already has correct structure");
+    // console.log("IndiaMart Extension: Data already has correct structure");
     return data;
   }
 
   // If data itself is an array, wrap it in the expected structure
   if (Array.isArray(data)) {
-    console.log("IndiaMart Extension: Data is an array, wrapping it");
+    // console.log("IndiaMart Extension: Data is an array, wrapping it");
     return { data: data };
   }
 
   // Look for arrays in the response that might contain the leads
   if (typeof data === "object") {
-    console.log("IndiaMart Extension: Data is an object, looking for arrays");
+    // console.log("IndiaMart Extension: Data is an object, looking for arrays");
 
     // Check common field names in IndiaMart API responses
     const possibleArrayFields = [
@@ -42,7 +42,7 @@ function ensureCorrectDataStructure(data) {
     // First check the common field names
     for (const field of possibleArrayFields) {
       if (data[field] && Array.isArray(data[field])) {
-        console.log(`IndiaMart Extension: Found array in field "${field}"`);
+        // console.log(`IndiaMart Extension: Found array in field "${field}"`);
         return { data: data[field] };
       }
     }
@@ -50,7 +50,7 @@ function ensureCorrectDataStructure(data) {
     // If not found in common fields, check all fields
     for (const key in data) {
       if (Array.isArray(data[key]) && data[key].length > 0) {
-        console.log(`IndiaMart Extension: Found array in field "${key}"`);
+        // console.log(`IndiaMart Extension: Found array in field "${key}"`);
         return { data: data[key] };
       }
     }
@@ -65,9 +65,9 @@ function ensureCorrectDataStructure(data) {
         // Recursively check this object
         const result = ensureCorrectDataStructure(data[key]);
         if (result.data && Array.isArray(result.data)) {
-          console.log(
-            `IndiaMart Extension: Found array in nested object "${key}"`
-          );
+          // console.log(
+          //   `IndiaMart Extension: Found array in nested object "${key}"`
+          // );
           return result;
         }
       }
@@ -75,9 +75,9 @@ function ensureCorrectDataStructure(data) {
   }
 
   // If we couldn't find any arrays, create an empty structure
-  console.log(
-    "IndiaMart Extension: Could not find any arrays, creating empty structure"
-  );
+  // console.log(
+  //   "IndiaMart Extension: Could not find any arrays, creating empty structure"
+  // );
   return { data: [] };
 }
 
@@ -90,15 +90,15 @@ function interceptFetch() {
 
     // Check if this is the target API
     if (url.includes("getContactList")) {
-      console.log("IndiaMart Extension: Detected getContactList API call");
+      console.log("IndiaMart Extension: Detected getContactList API call", url);
 
       // Log request details
       if (init && init.body) {
         try {
           const requestData = JSON.parse(init.body);
-          console.log("IndiaMart Extension: Request data:", requestData);
+          console.log("IndiaMart Extension: Request parameters:", requestData);
         } catch (e) {
-          // Not JSON or couldn't parse
+          console.log("IndiaMart Extension: Could not parse request body", e);
         }
       }
 
@@ -119,24 +119,24 @@ function interceptFetch() {
             "IndiaMart Extension: Response structure:",
             Object.keys(data)
           );
-          console.log(
-            "IndiaMart Extension: Raw data sample:",
-            JSON.stringify(data).substring(0, 500) + "..."
-          );
+          // console.log(
+          //   "IndiaMart Extension: Raw data sample:",
+          //   JSON.stringify(data).substring(0, 500) + "..."
+          // );
 
           // Ensure the data has the correct structure
           const processedData = ensureCorrectDataStructure(data);
 
           // Log some information about the processed data
           if (processedData.data && Array.isArray(processedData.data)) {
-            console.log(
-              `IndiaMart Extension: Found ${processedData.data.length} leads`
-            );
+            // console.log(
+            //   `IndiaMart Extension: Found ${processedData.data.length} leads`
+            // );
             if (processedData.data.length > 0) {
-              console.log(
-                "IndiaMart Extension: First lead sample:",
-                processedData.data[0]
-              );
+              // console.log(
+              //   "IndiaMart Extension: First lead sample:",
+              //   processedData.data[0]
+              // );
             }
           }
 
@@ -144,14 +144,14 @@ function interceptFetch() {
           try {
             // Check if the data is too large
             const dataSize = JSON.stringify(processedData).length;
-            console.log(`Data size: ${dataSize} bytes`);
+            // console.log(`Data size: ${dataSize} bytes`);
 
             // If data is very large, we need to chunk it
             if (dataSize > 5000000) {
               // 5MB limit
-              console.warn(
-                "Data is too large to send in one message. Sending summary only."
-              );
+              // console.warn(
+              //   "Data is too large to send in one message. Sending summary only."
+              // );
 
               // Create a summary version with limited data
               const summarizedData = {
@@ -192,12 +192,12 @@ function interceptFetch() {
                     return;
                   }
 
-                  console.log(`
-========== IndiaMart Data Sent to Background (Summarized) ==========
-Response: ${JSON.stringify(response)}
-Time: ${new Date().toISOString()}
-====================================================
-                  `);
+                  // console.log(`
+                  // ========== IndiaMart Data Sent to Background (Summarized) ==========
+                  // Response: ${JSON.stringify(response)}
+                  // Time: ${new Date().toISOString()}
+                  // ====================================================
+                  //                   `);
 
                   // Store the full data in localStorage for direct access
                   try {
@@ -205,9 +205,9 @@ Time: ${new Date().toISOString()}
                       "indiamartFullLeads",
                       JSON.stringify(processedData)
                     );
-                    console.log(
-                      "Full data stored in localStorage for direct access"
-                    );
+                    // console.log(
+                    //   "Full data stored in localStorage for direct access"
+                    // );
                   } catch (storageError) {
                     console.error(
                       "Error storing full data in localStorage:",
@@ -244,12 +244,12 @@ Time: ${new Date().toISOString()}
                     reject(chrome.runtime.lastError);
                     return;
                   }
-                  console.log(`
-========== IndiaMart Data Sent to Background ==========
-Response: ${JSON.stringify(response)}
-Time: ${new Date().toISOString()}
-====================================================
-                `);
+                  // console.log(`
+                  // ========== IndiaMart Data Sent to Background ==========
+                  // Response: ${JSON.stringify(response)}
+                  // Time: ${new Date().toISOString()}
+                  // =====================================================
+                  //                 `);
                   updateProgress({
                     status: "complete",
                     message: `Successfully fetched and processed ${processedData.data.length} leads`,
@@ -300,8 +300,25 @@ function interceptXHR() {
     // Check if this is the target API
     if (this._url && this._url.includes("getContactList")) {
       console.log(
-        "IndiaMart Extension: Detected getContactList API call via XHR"
+        "IndiaMart Extension: Detected getContactList API call via XHR",
+        this._url
       );
+
+      // Try to log request body if it's the first argument and is a string
+      if (arguments[0] && typeof arguments[0] === "string") {
+        try {
+          const requestData = JSON.parse(arguments[0]);
+          console.log(
+            "IndiaMart Extension: XHR Request parameters:",
+            requestData
+          );
+        } catch (e) {
+          console.log(
+            "IndiaMart Extension: Could not parse XHR request body",
+            e
+          );
+        }
+      }
 
       // Store the original onreadystatechange
       const originalOnReadyStateChange = this.onreadystatechange;
@@ -311,31 +328,37 @@ function interceptXHR() {
         if (this.readyState === 4 && this.status === 200) {
           try {
             const data = JSON.parse(this.responseText);
-            console.log(
-              "IndiaMart Extension: Successfully captured Lead Manager data via XHR"
-            );
-            console.log(
-              "IndiaMart Extension: Response structure:",
-              Object.keys(data)
-            );
-            console.log(
-              "IndiaMart Extension: Raw data sample:",
-              JSON.stringify(data).substring(0, 500) + "..."
-            );
+            console.log("IndiaMart Extension: XHR Response received:", {
+              url: this._url,
+              status: this.status,
+              responseKeys: Object.keys(data),
+              responsePreview: JSON.stringify(data).substring(0, 200) + "...",
+            });
+            // console.log(
+            //   "IndiaMart Extension: Successfully captured Lead Manager data via XHR"
+            // );
+            // console.log(
+            //   "IndiaMart Extension: Response structure:",
+            //   Object.keys(data)
+            // );
+            //   console.log(
+            //   "IndiaMart Extension: Raw data sample:",
+            //   JSON.stringify(data).substring(0, 500) + "..."
+            // );
 
             // Ensure the data has the correct structure
             const processedData = ensureCorrectDataStructure(data);
 
             // Log some information about the processed data
             if (processedData.data && Array.isArray(processedData.data)) {
-              console.log(
-                `IndiaMart Extension: Found ${processedData.data.length} leads`
-              );
+              // console.log(
+              //   `IndiaMart Extension: Found ${processedData.data.length} leads`
+              // );
               if (processedData.data.length > 0) {
-                console.log(
-                  "IndiaMart Extension: First lead sample:",
-                  processedData.data[0]
-                );
+                // console.log(
+                //   "IndiaMart Extension: First lead sample:",
+                //   processedData.data[0]
+                // );
               }
             }
 
@@ -343,14 +366,14 @@ function interceptXHR() {
             try {
               // Check if the data is too large
               const dataSize = JSON.stringify(processedData).length;
-              console.log(`Data size: ${dataSize} bytes`);
+              // console.log(`Data size: ${dataSize} bytes`);
 
               // If data is very large, we need to chunk it
               if (dataSize > 5000000) {
                 // 5MB limit
-                console.warn(
-                  "Data is too large to send in one message. Sending summary only."
-                );
+                // console.warn(
+                //   "Data is too large to send in one message. Sending summary only."
+                // );
 
                 // Create a summary version with limited data
                 const summarizedData = {
@@ -391,12 +414,12 @@ function interceptXHR() {
                       return;
                     }
 
-                    console.log(`
-========== IndiaMart Data Sent to Background (Summarized) ==========
-Response: ${JSON.stringify(response)}
-Time: ${new Date().toISOString()}
-====================================================
-                    `);
+                    // console.log(`
+                    // ========== IndiaMart Data Sent to Background (Summarized) ==========
+                    // Response: ${JSON.stringify(response)}
+                    // Time: ${new Date().toISOString()}
+                    // =====================================================
+                    //                   `);
 
                     // Store the full data in localStorage for direct access
                     try {
@@ -404,9 +427,9 @@ Time: ${new Date().toISOString()}
                         "indiamartFullLeads",
                         JSON.stringify(processedData)
                       );
-                      console.log(
-                        "Full data stored in localStorage for direct access"
-                      );
+                      //   console.log(
+                      //     "Full data stored in localStorage for direct access"
+                      // );
                     } catch (storageError) {
                       console.error(
                         "Error storing full data in localStorage:",
@@ -443,12 +466,12 @@ Time: ${new Date().toISOString()}
                       reject(chrome.runtime.lastError);
                       return;
                     }
-                    console.log(`
-========== IndiaMart Data Sent to Background ==========
-Response: ${JSON.stringify(response)}
-Time: ${new Date().toISOString()}
-====================================================
-                    `);
+                    // console.log(`
+                    // ========== IndiaMart Data Sent to Background ==========
+                    // Response: ${JSON.stringify(response)}
+                    // Time: ${new Date().toISOString()}
+                    // =====================================================
+                    //                   `);
                     updateProgress({
                       status: "complete",
                       message: `Successfully fetched and processed ${processedData.data.length} leads`,
@@ -520,12 +543,12 @@ Time: ${new Date().toISOString()}
 
 // Function to manually fetch lead data
 function fetchLeadData() {
-  console.log(`
-========== IndiaMart Lead Fetch Started ==========
-Time: ${new Date().toISOString()}
-Source: Manual fetch
-=================================================
-  `);
+  // console.log(`
+  // ========== IndiaMart Lead Fetch Started ==========
+  // Time: ${new Date().toISOString()}
+  // Source: Manual fetch
+  // ==================================================
+  //   `);
 
   // Track progress for the popup
   let progressData = {
@@ -558,6 +581,9 @@ Source: Manual fetch
       // Remove any circular references or functions
       const cleanData = JSON.parse(JSON.stringify(safeProgressData));
 
+      // Log the progress update
+      console.log("IndiaMart Extension: Progress update:", cleanData);
+
       chrome.runtime.sendMessage(
         {
           type: "FETCH_PROGRESS",
@@ -568,6 +594,11 @@ Source: Manual fetch
             console.warn(
               "Warning: Could not send progress update:",
               chrome.runtime.lastError.message
+            );
+          } else if (response && response.status === "error") {
+            console.warn(
+              "Error in progress update response:",
+              response.message
             );
           }
         }
@@ -583,12 +614,12 @@ Source: Manual fetch
     // First, get the total count of leads
     fetchLeadCount()
       .then((totalCount) => {
-        console.log(`
-========== IndiaMart Lead Count ==========
-Total Leads: ${totalCount}
-Time: ${new Date().toISOString()}
-=========================================
-        `);
+        //         console.log(`
+        // ========== IndiaMart Lead Count ==========
+        // Total Leads: ${totalCount}
+        // Time: ${new Date().toISOString()}
+        // =========================================
+        //         `);
 
         // Update progress with total count
         const batchSize = 100;
@@ -607,19 +638,19 @@ Time: ${new Date().toISOString()}
         const durationSeconds = (endTime - startTime) / 1000;
         const durationMinutes = durationSeconds / 60;
 
-        console.log(`
-========== IndiaMart Lead Fetch Completed ==========
-Total Leads Fetched: ${allLeads.length}
-Expected Leads: ${progressData.totalLeads}
-Batches Completed: ${progressData.completedBatches}
-Total Batches: ${progressData.totalBatches}
-Duration: ${durationSeconds.toFixed(2)} seconds (${durationMinutes.toFixed(
-          2
-        )} minutes)
-Start Time: ${startTime.toISOString()}
-End Time: ${endTime.toISOString()}
-====================================================
-        `);
+        //         console.log(`
+        // ========== IndiaMart Lead Fetch Completed ==========
+        // Total Leads Fetched: ${allLeads.length}
+        // Expected Leads: ${progressData.totalLeads}
+        // Batches Completed: ${progressData.completedBatches}
+        // Total Batches: ${progressData.totalBatches}
+        // Duration: ${durationSeconds.toFixed(2)} seconds (${durationMinutes.toFixed(
+        //           2
+        //         )} minutes)
+        // Start Time: ${startTime.toISOString()}
+        // End Time: ${endTime.toISOString()}
+        // ====================================================
+        //         `);
 
         updateProgress({
           status: "processing",
@@ -649,16 +680,16 @@ End Time: ${endTime.toISOString()}
             allLeads[allLeads.length - 1].date ||
             "N/A";
 
-          console.log(`
-========== IndiaMart Lead Date Range ==========
-First Lead Date: ${firstLeadDate}
-Last Lead Date: ${lastLeadDate}
-Number of Fields: ${processedData.sampleFields.length}
-Sample Fields: ${processedData.sampleFields.slice(0, 10).join(", ")}${
-            processedData.sampleFields.length > 10 ? "..." : ""
-          }
-==============================================
-          `);
+          //           console.log(`
+          // ========== IndiaMart Lead Date Range ==========
+          // First Lead Date: ${firstLeadDate}
+          // Last Lead Date: ${lastLeadDate}
+          // Number of Fields: ${processedData.sampleFields.length}
+          // Sample Fields: ${processedData.sampleFields.slice(0, 10).join(", ")}${
+          //             processedData.sampleFields.length > 10 ? "..." : ""
+          //           }
+          // ==============================================
+          //           `);
         }
 
         updateProgress({
@@ -671,7 +702,7 @@ Sample Fields: ${processedData.sampleFields.slice(0, 10).join(", ")}${
         try {
           // Check if the data is too large
           const dataSize = JSON.stringify(processedData).length;
-          console.log(`Data size: ${dataSize} bytes`);
+          // console.log(`Data size: ${dataSize} bytes`);
 
           // If data is very large, we need to chunk it
           if (dataSize > 5000000) {
@@ -719,12 +750,12 @@ Sample Fields: ${processedData.sampleFields.slice(0, 10).join(", ")}${
                   return;
                 }
 
-                console.log(`
-========== IndiaMart Data Sent to Background (Summarized) ==========
-Response: ${JSON.stringify(response)}
-Time: ${new Date().toISOString()}
-====================================================
-                `);
+                //                 console.log(`
+                // ========== IndiaMart Data Sent to Background (Summarized) ==========
+                // Response: ${JSON.stringify(response)}
+                // Time: ${new Date().toISOString()}
+                // ====================================================
+                //                 `);
 
                 // Store the full data in localStorage for direct access
                 try {
@@ -732,9 +763,9 @@ Time: ${new Date().toISOString()}
                     "indiamartFullLeads",
                     JSON.stringify(processedData)
                   );
-                  console.log(
-                    "Full data stored in localStorage for direct access"
-                  );
+                  // console.log(
+                  //   "Full data stored in localStorage for direct access"
+                  // );
                 } catch (storageError) {
                   console.error(
                     "Error storing full data in localStorage:",
@@ -771,12 +802,12 @@ Time: ${new Date().toISOString()}
                   reject(chrome.runtime.lastError);
                   return;
                 }
-                console.log(`
-========== IndiaMart Data Sent to Background ==========
-Response: ${JSON.stringify(response)}
-Time: ${new Date().toISOString()}
-====================================================
-                `);
+                //                 console.log(`
+                // ========== IndiaMart Data Sent to Background ==========
+                // Response: ${JSON.stringify(response)}
+                // Time: ${new Date().toISOString()}
+                // ====================================================
+                //                 `);
                 updateProgress({
                   status: "complete",
                   message: `Successfully fetched and processed ${processedData.data.length} leads`,
@@ -849,9 +880,9 @@ function fetchLeadCount() {
         // Fall back to total_count if total_unhidden_count is not available
         else if (data && typeof data.total_count !== "undefined") {
           const count = parseInt(data.total_count);
-          console.log(
-            `IndiaMart Extension: Using total_count as fallback: ${count}`
-          );
+          // console.log(
+          //   `IndiaMart Extension: Using total_count as fallback: ${count}`
+          // );
           resolve(count);
         }
         // If neither is available, check for other possible count fields
@@ -868,9 +899,9 @@ function fetchLeadCount() {
           for (const field of possibleCountFields) {
             if (typeof data[field] !== "undefined") {
               const count = parseInt(data[field]);
-              console.log(
-                `IndiaMart Extension: Using ${field} as count: ${count}`
-              );
+              // console.log(
+              //   `IndiaMart Extension: Using ${field} as count: ${count}`
+              // );
               resolve(count);
               return;
             }
@@ -881,9 +912,9 @@ function fetchLeadCount() {
             if (typeof data[key] === "number" || !isNaN(parseInt(data[key]))) {
               const count = parseInt(data[key]);
               if (count > 0) {
-                console.log(
-                  `IndiaMart Extension: Using ${key} as count: ${count}`
-                );
+                // console.log(
+                //   `IndiaMart Extension: Using ${key} as count: ${count}`
+                // );
                 resolve(count);
                 return;
               }
@@ -891,23 +922,23 @@ function fetchLeadCount() {
           }
 
           // Default to 100 if we can't find any count
-          console.log(
-            "IndiaMart Extension: Could not find any count field, using default of 100"
-          );
+          // console.log(
+          //   "IndiaMart Extension: Could not find any count field, using default of 100"
+          // );
           resolve(100);
         } else {
-          console.log(
-            "IndiaMart Extension: Invalid response format, using default of 100"
-          );
+          // console.log(
+          //   "IndiaMart Extension: Invalid response format, using default of 100"
+          // );
           resolve(100);
         }
       })
       .catch((error) => {
         console.error("IndiaMart Extension: Error fetching lead count:", error);
         // Default to 100 on error so we at least try to fetch some leads
-        console.log(
-          "IndiaMart Extension: Using default count of 100 due to error"
-        );
+        // console.log(
+        //   "IndiaMart Extension: Using default count of 100 due to error"
+        // );
         resolve(100);
       });
   });
@@ -930,18 +961,18 @@ function fetchAllLeads(totalCount, updateProgress) {
   // Function to directly trigger batch 3 with date range parameters
   function triggerBatch3Directly() {
     if (batch3Triggered) {
-      console.log("Batch 3 already triggered, skipping duplicate trigger");
+      // console.log("Batch 3 already triggered, skipping duplicate trigger");
       return;
     }
 
     batch3Triggered = true;
 
-    console.log(`
-========== IndiaMart MANUAL BATCH 3 TRIGGER ==========
-Directly triggering batch 3 with date range parameters.
-This ensures batch 3 runs regardless of what happens with batch 2.
-====================================================
-    `);
+    //       console.log(`
+    // ========== IndiaMart MANUAL BATCH 3 TRIGGER ==========
+    // Directly triggering batch 3 with date range parameters.
+    // This ensures batch 3 runs regardless of what happens with batch 2.
+    // ====================================================
+    //     `);
 
     // Set up date range parameters for batch 3
     const today = new Date();
@@ -965,18 +996,18 @@ This ensures batch 3 runs regardless of what happens with batch 2.
       originalLastContactDate: originalLastContactDate,
     };
 
-    console.log(`
-Manual trigger parameters for batch 3:
-From Date: ${fromDateStr}
-To Date: ${toDateStr}
-Start/End: ${batch3Start}/${batch3End}
-Original Last Contact Date (saved): ${originalLastContactDate}
-====================================================
-    `);
+    //     console.log(`
+    // Manual trigger parameters for batch 3:
+    // From Date: ${fromDateStr}
+    // To Date: ${toDateStr}
+    // Start/End: ${batch3Start}/${batch3End}
+    // Original Last Contact Date (saved): ${originalLastContactDate}
+    // ====================================================
+    //     `);
 
     // Directly trigger batch 3 with a slight delay
     setTimeout(() => {
-      console.log("MANUAL BATCH 3 TRIGGER: Executing batch 3");
+      // console.log("MANUAL BATCH 3 TRIGGER: Executing batch 3");
 
       // Save current state to restore after batch 3
       const savedStart = currentStart;
@@ -993,7 +1024,7 @@ Original Last Contact Date (saved): ${originalLastContactDate}
 
       // Schedule restoration of original parameters for batch 4
       setTimeout(() => {
-        console.log("Restoring original parameters after batch 3");
+        // console.log("Restoring original parameters after batch 3");
         currentStart = savedEnd + 1;
         currentEnd = currentStart + batchSize - 1;
         lastContactDate = savedLastContactDate;
@@ -1004,30 +1035,30 @@ Original Last Contact Date (saved): ${originalLastContactDate}
   // Schedule batch 3 to run after a delay
   setTimeout(triggerBatch3Directly, 15000);
 
-  console.log(`
-========== IndiaMart Fetch Plan ==========
-Total Leads: ${totalCount}
-Batch Size: ${batchSize}
-Total Batches: ${Math.ceil(totalCount / batchSize)}
-Time: ${new Date().toISOString()}
-==============================================
-  `);
+  //   console.log(`
+  // ========== IndiaMart Fetch Plan ==========
+  // Total Leads: ${totalCount}
+  // Batch Size: ${batchSize}
+  // Total Batches: ${Math.ceil(totalCount / batchSize)}
+  // Time: ${new Date().toISOString()}
+  // ==============================================
+  //   `);
 
   // Add special debug logging for batch planning
-  console.log(`
-========== IndiaMart Batch Planning ==========
-Will attempt to fetch multiple batches
-Batch 1: Standard approach with empty last_contact_date
-Batch 2: Standard approach with last_contact_date from batch 1
-Batch 3: Will use date range approach (from_date/to_date)
-==============================================
-  `);
+  //   console.log(`
+  // ========== IndiaMart Batch Planning ==========
+  // Will attempt to fetch multiple batches
+  // Batch 1: Standard approach with empty last_contact_date
+  // Batch 2: Standard approach with last_contact_date from batch 1
+  // Batch 3: Will use date range approach (from_date/to_date)
+  // ==============================================
+  //   `);
 
   // Helper function to extract last_contact_date from a lead
   function getLastContactDate(lead) {
     // Direct access to last_contact_date field
     if (lead.last_contact_date) {
-      console.log(`Found last_contact_date: ${lead.last_contact_date}`);
+      //  console.log(`Found last_contact_date: ${lead.last_contact_date}`);
       return lead.last_contact_date; // Return as is - already in the format expected by the API
     }
 
@@ -1045,7 +1076,7 @@ Batch 3: Will use date range approach (from_date/to_date)
 
     for (const field of possibleFields) {
       if (lead[field]) {
-        console.log(`Found date in field ${field}: ${lead[field]}`);
+        // console.log(`Found date in field ${field}: ${lead[field]}`);
         // Return as is - assuming it's in the correct format
         return lead[field];
       }
@@ -1134,12 +1165,12 @@ Forcing date range parameters for batch 3.
         // Remove or reset other parameters that might conflict
         requestData.last_contact_date = "";
 
-        console.log(`
-Fallback date range for batch 3:
-From Date: ${fromDateStr}
-To Date: ${toDateStr}
-====================================================
-        `);
+        //         console.log(`
+        // Fallback date range for batch 3:
+        // From Date: ${fromDateStr}
+        // To Date: ${toDateStr}
+        // ====================================================
+        //         `);
       }
 
       console.log(`
@@ -1165,44 +1196,44 @@ Time: ${new Date().toISOString()}
       })
         .then((response) => {
           // Debug statement to check if this code is being executed for batch 3
-          console.log(`BATCH DEBUG: Processing response for batch ${batchNum}`);
+          // console.log(`BATCH DEBUG: Processing response for batch ${batchNum}`);
 
           // Special logging for batch 3
           if (batchNum === 3) {
-            console.log(`
-========== IndiaMart Batch 3 Response Details ==========
-Status: ${response.status} ${response.statusText}
-Headers: ${JSON.stringify(Object.fromEntries([...response.headers]))}
-Request Data Used: ${JSON.stringify(requestData)}
-Time: ${new Date().toISOString()}
-====================================================
-            `);
+            //             console.log(`
+            // ========== IndiaMart Batch 3 Response Details ==========
+            // Status: ${response.status} ${response.statusText}
+            // Headers: ${JSON.stringify(Object.fromEntries([...response.headers]))}
+            // Request Data Used: ${JSON.stringify(requestData)}
+            // Time: ${new Date().toISOString()}
+            // ====================================================
+            //             `);
 
             // Clone the response so we can log the raw text
             response
               .clone()
               .text()
               .then((text) => {
-                console.log(`
-========== IndiaMart Batch 3 Raw Response ==========
-Raw Response Text: ${text}
-Length: ${text.length}
-====================================================
-              `);
+                //                 console.log(`
+                // ========== IndiaMart Batch 3 Raw Response ==========
+                // Raw Response Text: ${text}
+                // Length: ${text.length}
+                // ====================================================
+                //               `);
               })
               .catch((err) => {
                 console.error("Error getting raw response text:", err);
               });
           }
 
-          console.log(`
-========== IndiaMart API Response Status ==========
-Batch: ${batchNum}
-Status: ${response.status} ${response.statusText}
-Headers: ${JSON.stringify(Object.fromEntries([...response.headers]))}
-Time: ${new Date().toISOString()}
-====================================================
-          `);
+          //           console.log(`
+          // ========== IndiaMart API Response Status ==========
+          // Batch: ${batchNum}
+          // Status: ${response.status} ${response.statusText}
+          // Headers: ${JSON.stringify(Object.fromEntries([...response.headers]))}
+          // Time: ${new Date().toISOString()}
+          // ====================================================
+          //           `);
 
           if (!response.ok) {
             throw new Error(
@@ -1252,10 +1283,10 @@ Message: ${data.message || "None"}
 
           if (data && data.result && Array.isArray(data.result)) {
             leads = data.result;
-            console.log(`Found ${leads.length} leads in data.result array`);
+            // console.log(`Found ${leads.length} leads in data.result array`);
           } else if (data && data.data && Array.isArray(data.data)) {
             leads = data.data;
-            console.log(`Found ${leads.length} leads in data.data array`);
+            // console.log(`Found ${leads.length} leads in data.data array`);
           } else {
             // Check for API-specific error messages
             let errorMessage = "";
@@ -1284,20 +1315,24 @@ API Error Message: ${errorMessage || "None"}
             // For batch 2, try to recover by continuing with empty leads
             if (batchNum === 2) {
               console.log(`
-========== IndiaMart Batch 2 Recovery Attempt ==========
-Batch 2 often returns a different structure or error.
-Attempting to continue with next batch using last contact date from batch 1.
-===========================================================
+========== IndiaMart Batch 2 Empty Recovery ==========
+Batch 2 returned no leads. This is common with the IndiaMart API.
+Will still proceed to batch 3 with date range approach.
+====================================================
               `);
+
+              // Reset consecutive empty batches counter for batch 2 only
+              // This ensures we don't stop after batch 2 returns empty
+              consecutiveEmptyBatches = 0;
             }
           }
 
-          console.log(`
-========== IndiaMart Batch Summary ==========
-Batch: ${batchNum}
-Leads Found: ${leads.length}
-===========================================
-          `);
+          //           console.log(`
+          // ========== IndiaMart Batch Summary ==========
+          // Batch: ${batchNum}
+          // Leads Found: ${leads.length}
+          // ===========================================
+          //           `);
 
           // Update lastContactDate for the next batch and add leads to collection
           if (leads.length > 0) {
@@ -1312,21 +1347,21 @@ Leads Found: ${leads.length}
             // Reset consecutive empty batches counter
             consecutiveEmptyBatches = 0;
 
-            console.log(`
-========== IndiaMart Last Contact Date Update ==========
-Batch: ${batchNum}
-Previous Last Contact Date: ${previousLastContactDate}
-New Last Contact Date: ${lastContactDate}
-Last Lead ID: ${
-              lastLead.id ||
-              lastLead.contact_id ||
-              lastLead.query_id ||
-              "unknown"
-            }
-Total Fetched: ${totalFetched}/${totalCount}
-Progress: ${((totalFetched / totalCount) * 100).toFixed(2)}%
-====================================================
-            `);
+            //             console.log(`
+            // ========== IndiaMart Last Contact Date Update ==========
+            // Batch: ${batchNum}
+            // Previous Last Contact Date: ${previousLastContactDate}
+            // New Last Contact Date: ${lastContactDate}
+            // Last Lead ID: ${
+            //               lastLead.id ||
+            //               lastLead.contact_id ||
+            //               lastLead.query_id ||
+            //               "unknown"
+            //             }
+            // Total Fetched: ${totalFetched}/${totalCount}
+            // Progress: ${((totalFetched / totalCount) * 100).toFixed(2)}%
+            // ====================================================
+            //             `);
           } else {
             consecutiveEmptyBatches++;
             console.log(`
@@ -1348,6 +1383,12 @@ Batch 2 returned no leads. This is common with the IndiaMart API.
 Will still proceed to batch 3 with date range approach.
 ====================================================
               `);
+              //               console.log(`
+              // ========== IndiaMart Batch 2 Empty Recovery ==========
+              // Batch 2 returned no leads. This is common with the IndiaMart API.
+              // Will still proceed to batch 3 with date range approach.
+              // ====================================================
+              //               `);
 
               // Reset consecutive empty batches counter for batch 2 only
               // This ensures we don't stop after batch 2 returns empty
@@ -1367,12 +1408,12 @@ Will still proceed to batch 3 with date range approach.
           // DIRECT TRIGGER FOR BATCH 3
           // If this is batch 2 completing, immediately trigger batch 3 with date range parameters
           if (batchNum === 2) {
-            console.log(`
-========== IndiaMart DIRECT TRIGGER FOR BATCH 3 ==========
-Batch 2 has completed. Directly triggering batch 3 with date range parameters.
-This bypasses the normal continuation logic to ensure batch 3 runs.
-====================================================
-            `);
+            // console.log(`
+            // ========== IndiaMart DIRECT TRIGGER FOR BATCH 3 ==========
+            // Batch 2 has completed. Directly triggering batch 3 with date range parameters.
+            // This bypasses the normal continuation logic to ensure batch 3 runs.
+            // ====================================================
+            // `);
 
             // Set up date range parameters for batch 3
             const today = new Date();
@@ -1397,15 +1438,15 @@ This bypasses the normal continuation logic to ensure batch 3 runs.
               originalLastContactDate: originalLastContactDate,
             };
 
-            console.log(`
-Direct trigger parameters for batch 3:
-From Date: ${fromDateStr}
-To Date: ${toDateStr}
-Start/End: ${currentStart}/${currentEnd}
-Last Contact Date: ${lastContactDate}
-Original Last Contact Date (saved): ${originalLastContactDate}
-====================================================
-            `);
+            //             console.log(`
+            // Direct trigger parameters for batch 3:
+            // From Date: ${fromDateStr}
+            // To Date: ${toDateStr}
+            // Start/End: ${currentStart}/${currentEnd}
+            // Last Contact Date: ${lastContactDate}
+            // Original Last Contact Date (saved): ${originalLastContactDate}
+            // ====================================================
+            //             `);
 
             // Mark batch 3 as triggered to prevent duplicate triggers
             batch3Triggered = true;
@@ -1415,9 +1456,9 @@ Original Last Contact Date (saved): ${originalLastContactDate}
 
             // Directly trigger batch 3 with a slight delay
             setTimeout(() => {
-              console.log(
-                "DIRECT BATCH 3 TRIGGER: Executing batch 3 after delay"
-              );
+              // console.log(
+              //   "DIRECT BATCH 3 TRIGGER: Executing batch 3 after delay"
+              // );
               processBatch(3); // Explicitly use 3 instead of completedBatches + 1
             }, 1000);
 
@@ -1440,29 +1481,29 @@ Original Last Contact Date (saved): ${originalLastContactDate}
 
           // Force continuation to batch 3 if we're on batch 2
           if (isBatch2) {
-            console.log(`
-========== IndiaMart Force Batch 3 ==========
-Forcing continuation to batch 3 regardless of other conditions
-This ensures we try the date range approach for batch 3
-====================================================
-            `);
+            // console.log(`
+            // ========== IndiaMart Force Batch 3 ==========
+            // Forcing continuation to batch 3 regardless of other conditions
+            // This ensures we try the date range approach for batch 3
+            // =====================================================
+            //             `);
           }
 
-          console.log(`
-========== IndiaMart Continuation Decision ==========
-Should Continue: ${shouldContinue}
-Total Fetched: ${totalFetched}/${totalCount}
-Leads in Current Batch: ${leads.length}
-Is Batch 2: ${isBatch2}
-Consecutive Empty Batches: ${consecutiveEmptyBatches}/${maxConsecutiveEmptyBatches}
-Condition 1 (totalFetched < totalCount): ${totalFetched < totalCount}
-Condition 2 (leads.length > 0): ${leads.length > 0}
-Condition 3 (consecutiveEmptyBatches < maxConsecutiveEmptyBatches): ${
-            consecutiveEmptyBatches < maxConsecutiveEmptyBatches
-          }
-Condition 4 (isBatch2): ${isBatch2}
-====================================================
-          `);
+          //           console.log(`
+          // ========== IndiaMart Continuation Decision ==========
+          // Should Continue: ${shouldContinue}
+          // Total Fetched: ${totalFetched}/${totalCount}
+          // Leads in Current Batch: ${leads.length}
+          // Is Batch 2: ${isBatch2}
+          // Consecutive Empty Batches: ${consecutiveEmptyBatches}/${maxConsecutiveEmptyBatches}
+          // Condition 1 (totalFetched < totalCount): ${totalFetched < totalCount}
+          // Condition 2 (leads.length > 0): ${leads.length > 0}
+          // Condition 3 (consecutiveEmptyBatches < maxConsecutiveEmptyBatches): ${
+          //             consecutiveEmptyBatches < maxConsecutiveEmptyBatches
+          //           }
+          // Condition 4 (isBatch2): ${isBatch2}
+          // ====================================================
+          //           `);
 
           if (shouldContinue) {
             // Prepare for next batch
@@ -1471,13 +1512,13 @@ Condition 4 (isBatch2): ${isBatch2}
 
             // Special handling for batch 3 (after batch 2)
             if (batchNum === 2) {
-              console.log(`
-========== IndiaMart Special Handling for Batch 3 ==========
-Batch 2 completed. Preparing special parameters for batch 3.
-Previous start/end: ${currentStart}/${currentEnd}
-Previous last_contact_date: ${lastContactDate}
-====================================================
-              `);
+              //               console.log(`
+              // ========== IndiaMart Special Handling for Batch 3 ==========
+              // Batch 2 completed. Preparing special parameters for batch 3.
+              // Previous start/end: ${currentStart}/${currentEnd}
+              // Previous last_contact_date: ${lastContactDate}
+              // ====================================================
+              //               `);
 
               // Try a completely different approach for batch 3
               // Instead of using start/end/last_contact_date, use from_date/to_date parameters
@@ -1509,31 +1550,31 @@ Previous last_contact_date: ${lastContactDate}
                 originalLastContactDate: originalLastContactDate,
               };
 
-              console.log(`
-Updated approach for batch 3:
-Using date range instead of last_contact_date
-From Date: ${fromDateStr}
-To Date: ${toDateStr}
-Start/End: ${currentStart}/${currentEnd}
-Last Contact Date: ${lastContactDate}
-Original Last Contact Date (saved): ${originalLastContactDate}
-====================================================
-              `);
+              //               console.log(`
+              // Updated approach for batch 3:
+              // Using date range instead of last_contact_date
+              // From Date: ${fromDateStr}
+              // To Date: ${toDateStr}
+              // Start/End: ${currentStart}/${currentEnd}
+              // Last Contact Date: ${lastContactDate}
+              // Original Last Contact Date (saved): ${originalLastContactDate}
+              // ====================================================
+              //               `);
 
               // Add a debug log to confirm we're about to process batch 3
-              console.log(
-                "BATCH DEBUG: About to process batch 3 after batch 2 success"
-              );
+              // console.log(
+              //   "BATCH DEBUG: About to process batch 3 after batch 2 success"
+              // );
             }
 
             // Special handling for batch 4 (after batch 3)
             if (batchNum === 3) {
-              console.log(`
-========== IndiaMart Special Handling for Batch 4 ==========
-Batch 3 completed. Preparing special parameters for batch 4.
-Batch 3 returned ${leads.length} leads.
-====================================================
-              `);
+              //               console.log(`
+              // ========== IndiaMart Special Handling for Batch 4 ==========
+              // Batch 3 completed. Preparing special parameters for batch 4.
+              // Batch 3 returned ${leads.length} leads.
+              // ====================================================
+              //               `);
 
               if (leads.length > 0) {
                 // Batch 3 succeeded with the date range approach
@@ -1558,13 +1599,13 @@ Batch 3 returned ${leads.length} leads.
                     dateRangeParams.originalLastContactDate,
                 };
 
-                console.log(`
-Updated date range for batch 4:
-From Date: ${fromDateStr}
-To Date: ${toDateStr}
-Using date range approach since it worked for batch 3
-====================================================
-                `);
+                //                 console.log(`
+                // Updated date range for batch 4:
+                // From Date: ${fromDateStr}
+                // To Date: ${toDateStr}
+                // Using date range approach since it worked for batch 3
+                // ====================================================
+                //                 `);
               } else {
                 // Batch 3 failed with date range approach
                 // Try going back to original approach but with a different offset
@@ -1582,13 +1623,13 @@ Using date range approach since it worked for batch 3
                   lastContactDate = dateRangeParams.originalLastContactDate;
                 }
 
-                console.log(`
-Reverting to original approach for batch 4:
-Start/End: ${currentStart}/${currentEnd}
-Last Contact Date: ${lastContactDate}
-Date range approach didn't work for batch 3
-====================================================
-                `);
+                //                 console.log(`
+                // Reverting to original approach for batch 4:
+                // Start/End: ${currentStart}/${currentEnd}
+                // Last Contact Date: ${lastContactDate}
+                // Date range approach didn't work for batch 3
+                // ====================================================
+                //                 `);
               }
             }
 
@@ -1600,15 +1641,15 @@ Date range approach didn't work for batch 3
             const stoppedDueToEmptyBatches =
               consecutiveEmptyBatches >= maxConsecutiveEmptyBatches;
 
-            console.log(`
-========== IndiaMart All Batches Completed ==========
-Total Batches: ${completedBatches}/${Math.ceil(totalCount / batchSize)}
-Total Leads: ${totalFetched}/${totalCount}
-Fetching Complete: ${fetchingComplete}
-Stopped Due To Empty Batches: ${stoppedDueToEmptyBatches}
-Time: ${new Date().toISOString()}
-====================================================
-            `);
+            //             console.log(`
+            // ========== IndiaMart All Batches Completed ==========
+            // Total Batches: ${completedBatches}/${Math.ceil(totalCount / batchSize)}
+            // Total Leads: ${totalFetched}/${totalCount}
+            // Fetching Complete: ${fetchingComplete}
+            // Stopped Due To Empty Batches: ${stoppedDueToEmptyBatches}
+            // Time: ${new Date().toISOString()}
+            // ====================================================
+            //             `);
 
             // If we didn't get all leads, log a warning
             if (totalFetched < totalCount) {
@@ -1635,16 +1676,16 @@ This may be due to:
 Error: ${error.message}
 Time: ${new Date().toISOString()}
 ====================================================
-          `);
+      `);
 
           // Special handling for batch 2 errors
           if (batchNum === 2) {
-            console.log(`
-========== IndiaMart Batch 2 Error Recovery ==========
-Batch 2 failed with error: ${error.message}
-Directly triggering batch 3 with date range parameters.
-====================================================
-            `);
+            //             console.log(`
+            // ========== IndiaMart Batch 2 Error Recovery ==========
+            // Batch 2 failed with error: ${error.message}
+            // Directly triggering batch 3 with date range parameters.
+            // ====================================================
+            //             `);
 
             // Set up date range parameters for batch 3
             const today = new Date();
@@ -1669,15 +1710,15 @@ Directly triggering batch 3 with date range parameters.
               originalLastContactDate: originalLastContactDate,
             };
 
-            console.log(`
-Direct trigger parameters for batch 3 after error:
-From Date: ${fromDateStr}
-To Date: ${toDateStr}
-Start/End: ${currentStart}/${currentEnd}
-Last Contact Date: ${lastContactDate}
-Original Last Contact Date (saved): ${originalLastContactDate}
-====================================================
-            `);
+            //             console.log(`
+            // Direct trigger parameters for batch 3 after error:
+            // From Date: ${fromDateStr}
+            // To Date: ${toDateStr}
+            // Start/End: ${currentStart}/${currentEnd}
+            // Last Contact Date: ${lastContactDate}
+            // Original Last Contact Date (saved): ${originalLastContactDate}
+            // ====================================================
+            //             `);
 
             // Mark batch 3 as triggered to prevent duplicate triggers
             batch3Triggered = true;
@@ -1687,13 +1728,13 @@ Original Last Contact Date (saved): ${originalLastContactDate}
             completedBatches++;
 
             // Directly trigger batch 3 with a slight delay
-            console.log(
-              "DIRECT BATCH 3 TRIGGER: Scheduling batch 3 after batch 2 error"
-            );
+            // console.log(
+            //   "DIRECT BATCH 3 TRIGGER: Scheduling batch 3 after batch 2 error"
+            // );
             setTimeout(() => {
-              console.log(
-                "DIRECT BATCH 3 TRIGGER: Executing batch 3 after delay"
-              );
+              // console.log(
+              //   "DIRECT BATCH 3 TRIGGER: Executing batch 3 after delay"
+              // );
               processBatch(3); // Explicitly use 3 instead of completedBatches + 1
             }, 1000);
             return; // Skip the normal error handling
@@ -1716,14 +1757,14 @@ Original Last Contact Date (saved): ${originalLastContactDate}
             currentEnd = currentStart + batchSize - 1;
             processBatch(completedBatches + 1);
           } else {
-            console.log(`
-========== IndiaMart All Batches Completed With Errors ==========
-Total Batches: ${completedBatches}/${Math.ceil(totalCount / batchSize)}
-Total Leads: ${totalFetched}/${totalCount}
-Errors: ${errorMessages.length}
-Time: ${new Date().toISOString()}
-========================================================
-            `);
+            //             console.log(`
+            // ========== IndiaMart All Batches Completed With Errors ==========
+            // Total Batches: ${completedBatches}/${Math.ceil(totalCount / batchSize)}
+            // Total Leads: ${totalFetched}/${totalCount}
+            // Errors: ${errorMessages.length}
+            // Time: ${new Date().toISOString()}
+            // ========================================================
+            //             `);
             resolve(allLeads);
           }
         });
@@ -1745,17 +1786,17 @@ function createLeadManagerObserver() {
     if (captureSetup) return;
     captureSetup = true;
 
-    console.log("IndiaMart Extension: Lead Manager page detected");
+    // console.log("IndiaMart Extension: Lead Manager page detected");
 
     // Try to manually fetch the data
     // We'll use a slight delay to ensure the page is fully loaded
     setTimeout(() => {
-      console.log("IndiaMart Extension: Auto-fetching lead data");
+      // console.log("IndiaMart Extension: Auto-fetching lead data");
       fetchLeadData()
         .then((result) => {
-          console.log(
-            `IndiaMart Extension: Auto-fetch completed successfully. Found ${result.data.length} leads.`
-          );
+          // console.log(
+          //   `IndiaMart Extension: Auto-fetch completed successfully. Found ${result.data.length} leads.`
+          // );
         })
         .catch((error) => {
           console.error("IndiaMart Extension: Auto-fetch failed:", error);
@@ -1770,12 +1811,12 @@ function createLeadManagerObserver() {
 
     // Refresh every 5 minutes instead of every minute to avoid rate limiting
     window.leadManagerRefreshInterval = setInterval(() => {
-      console.log("IndiaMart Extension: Auto-refreshing lead data");
+      // console.log("IndiaMart Extension: Auto-refreshing lead data");
       fetchLeadData()
         .then((result) => {
-          console.log(
-            `IndiaMart Extension: Auto-refresh completed. Found ${result.data.length} leads.`
-          );
+          // console.log(
+          //   `IndiaMart Extension: Auto-refresh completed. Found ${result.data.length} leads.`
+          // );
         })
         .catch((error) => {
           console.error("IndiaMart Extension: Auto-refresh failed:", error);
@@ -1865,9 +1906,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Send an immediate response
     sendResponse({ status: "received" });
   } else if (message.action === "LEAD_MANAGER_PAGE_DETECTED") {
-    console.log(
-      "IndiaMart Extension: Lead Manager page detected by background script"
-    );
+    // console.log(
+    //   "IndiaMart Extension: Lead Manager page detected by background script"
+    // );
     // Try to fetch the lead data
     fetchLeadData();
     sendResponse({ status: "fetching" });
@@ -1876,16 +1917,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Listen for messages from the popup
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
-  console.log("Content script received message:", message);
+  // console.log("Content script received message:", message);
 
   if (
     message.action === "fetchLeadData" ||
     message.action === "EXTRACT_LEADS"
   ) {
-    console.log(
-      "Content script: Extracting lead data, isRefresh:",
-      message.isRefresh
-    );
+    // console.log(
+    //   "Content script: Extracting lead data, isRefresh:",
+    //   message.isRefresh
+    // );
 
     // Send immediate response to let popup know we're working on it
     sendResponse({
@@ -1897,13 +1938,13 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     // Extract lead data from the page - this is now asynchronous
     extractLeadData(message.isRefresh || message.forceFetch || false)
       .then((result) => {
-        console.log(
-          "Content script: Lead data extraction completed successfully",
-          {
-            totalLeads: result.data.length,
-            source: result.source,
-          }
-        );
+        // console.log(
+        //   "Content script: Lead data extraction completed successfully",
+        //   {
+        //     totalLeads: result.data.length,
+        //     source: result.source,
+        //   }
+        // );
         // The data is already sent to the background script in the extractLeadData function
       })
       .catch((error) => {
@@ -1926,7 +1967,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
 // Function to extract lead data from the page
 function extractLeadData(isRefresh) {
-  console.log("Content script: Extracting lead data, isRefresh:", isRefresh);
+  // console.log("Content script: Extracting lead data, isRefresh:", isRefresh);
 
   // Track progress for the popup
   let progressData = {
@@ -1961,6 +2002,9 @@ function extractLeadData(isRefresh) {
       // Remove any circular references or functions
       const cleanData = JSON.parse(JSON.stringify(safeProgressData));
 
+      // Log the progress update
+      console.log("IndiaMart Extension: Progress update:", cleanData);
+
       chrome.runtime.sendMessage(
         {
           type: "FETCH_PROGRESS",
@@ -1971,6 +2015,11 @@ function extractLeadData(isRefresh) {
             console.warn(
               "Warning: Could not send progress update:",
               chrome.runtime.lastError.message
+            );
+          } else if (response && response.status === "error") {
+            console.warn(
+              "Error in progress update response:",
+              response.message
             );
           }
         }
@@ -1983,7 +2032,7 @@ function extractLeadData(isRefresh) {
   // Use our API-based approach to fetch all leads
   return fetchLeadData()
     .then((processedData) => {
-      console.log("Content script: Lead data extraction complete via API");
+      // console.log("Content script: Lead data extraction complete via API");
       updateProgress({
         status: "complete",
         fetchedLeads: processedData.data.length,
@@ -2026,7 +2075,7 @@ function extractLeadData(isRefresh) {
           // First, try to find data in the global window object (IndiaMart often stores data here)
           if (window.leadData || window.LEAD_DATA || window.leads) {
             const rawData = window.leadData || window.LEAD_DATA || window.leads;
-            console.log("Content script: Found lead data in window object");
+            // console.log("Content script: Found lead data in window object");
 
             // Process the data
             let processedData = [];
@@ -2103,9 +2152,9 @@ function extractLeadData(isRefresh) {
           );
 
           if (leadElements && leadElements.length > 0) {
-            console.log(
-              `Content script: Found ${leadElements.length} lead elements in DOM`
-            );
+            // console.log(
+            //   `Content script: Found ${leadElements.length} lead elements in DOM`
+            // );
 
             updateProgress({
               status: "extracting_dom",
@@ -2231,7 +2280,7 @@ function extractLeadData(isRefresh) {
           }
 
           // If we couldn't find any leads, return an empty result
-          console.log("Content script: Could not find any leads on the page");
+          // console.log("Content script: Could not find any leads on the page");
           updateProgress({
             status: "no_leads_found",
             source: "empty",
@@ -2337,7 +2386,7 @@ window.addEventListener("beforeunload", function () {
 
 // Initialize interception
 (function () {
-  console.log("IndiaMart Extension: Content script loaded");
+  // console.log("IndiaMart Extension: Content script loaded");
   interceptFetch();
   interceptXHR();
   createLeadManagerObserver();

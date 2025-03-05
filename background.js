@@ -165,17 +165,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     try {
       chrome.runtime.sendMessage(
         {
-          type: "FETCH_PROGRESS",
+          type: "FETCH_PROGRESS_UPDATE",
           data: message.data,
         },
         (response) => {
           if (chrome.runtime.lastError) {
             // No popup listening or error
+            console.warn(
+              "Background: Error forwarding progress update to popup:",
+              chrome.runtime.lastError.message
+            );
           }
         }
       );
     } catch (error) {
       // Error sending progress to popup
+      console.error("Background: Error forwarding progress update:", error);
     }
 
     sendResponse({ status: "success" });

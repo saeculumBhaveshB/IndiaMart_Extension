@@ -1258,6 +1258,8 @@ document.addEventListener("DOMContentLoaded", function () {
     const progressContainer = document.getElementById("progressContainer");
     if (progressContainer) {
       progressContainer.style.display = "none";
+    } else {
+      console.error("Popup: Missing progressContainer element");
     }
 
     // Check Chrome APIs
@@ -1274,6 +1276,14 @@ document.addEventListener("DOMContentLoaded", function () {
       "clearData",
       "refreshData",
       "leadsTable",
+      "progressContainer",
+      "progressStatus",
+      "progressDetails",
+      "progressBar",
+      "progressLeadCount",
+      "progressTotalLeads",
+      "dataSource",
+      "lastUpdated",
     ];
 
     const missingElements = [];
@@ -1286,12 +1296,29 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (missingElements.length > 0) {
       console.error(`Popup: Missing elements: ${missingElements.join(", ")}`);
+
+      // Create an error message for the user
+      const errorDiv = document.createElement("div");
+      errorDiv.style.padding = "10px";
+      errorDiv.style.marginBottom = "10px";
+      errorDiv.style.backgroundColor = "#f8d7da";
+      errorDiv.style.color = "#721c24";
+      errorDiv.style.borderRadius = "4px";
+      errorDiv.style.border = "1px solid #f5c6cb";
+      errorDiv.textContent = `Error: Missing UI elements. Please reload the extension.`;
+
+      // Try to insert at the beginning of the body
+      if (document.body) {
+        document.body.insertBefore(errorDiv, document.body.firstChild);
+      }
     }
 
     // Load initial data
     try {
       loadDataFromStorage();
     } catch (error) {
+      console.error("Popup: Error loading data from storage:", error);
+
       // Try to update the UI to show the error
       try {
         const totalLeadsSpan = document.getElementById("totalLeads");
@@ -1433,6 +1460,8 @@ function updateProgressUI(progressData) {
   // Safely update status text
   if (progressStatus) {
     progressStatus.textContent = statusText;
+  } else {
+    console.warn("Popup: Missing progressStatus element");
   }
 
   // Safely update error details if present
@@ -1461,6 +1490,8 @@ function updateProgressUI(progressData) {
     } else {
       progressDetails.textContent = "";
     }
+  } else {
+    console.warn("Popup: Missing progressDetails element");
   }
 
   // Update progress bar
@@ -1468,6 +1499,8 @@ function updateProgressUI(progressData) {
     // Update the total leads count
     if (progressTotalLeads) {
       progressTotalLeads.textContent = progressData.totalLeads;
+    } else {
+      console.warn("Popup: Missing progressTotalLeads element");
     }
 
     // Calculate progress percentage
@@ -1488,6 +1521,8 @@ function updateProgressUI(progressData) {
     // Update the fetched leads count
     if (progressLeadCount && progressData.fetchedLeads !== undefined) {
       progressLeadCount.textContent = progressData.fetchedLeads;
+    } else if (progressData.fetchedLeads !== undefined) {
+      console.warn("Popup: Missing progressLeadCount element");
     }
   } else if (
     progressBar &&
@@ -1504,7 +1539,14 @@ function updateProgressUI(progressData) {
     ) {
       progressLeadCount.textContent = progressData.fetchedLeads;
       progressTotalLeads.textContent = progressData.fetchedLeads;
+    } else if (progressData.fetchedLeads !== undefined) {
+      if (!progressLeadCount)
+        console.warn("Popup: Missing progressLeadCount element");
+      if (!progressTotalLeads)
+        console.warn("Popup: Missing progressTotalLeads element");
     }
+  } else {
+    if (!progressBar) console.warn("Popup: Missing progressBar element");
   }
 }
 
@@ -1512,6 +1554,7 @@ function updateProgressUI(progressData) {
 function updateStats(data) {
   try {
     if (!data || !data.data) {
+      console.warn("Popup: No data provided to updateStats");
       return;
     }
 
@@ -1519,6 +1562,8 @@ function updateStats(data) {
     const totalLeadsSpan = document.getElementById("totalLeads");
     if (totalLeadsSpan) {
       totalLeadsSpan.textContent = data.data.length.toString();
+    } else {
+      console.warn("Popup: Missing totalLeads element");
     }
 
     // Update timestamp if available
@@ -1527,6 +1572,8 @@ function updateStats(data) {
       if (timestampElem) {
         const date = new Date(data.timestamp);
         timestampElem.textContent = date.toLocaleString();
+      } else {
+        console.warn("Popup: Missing lastUpdated element");
       }
     }
 
@@ -1535,6 +1582,8 @@ function updateStats(data) {
       const sourceElem = document.getElementById("dataSource");
       if (sourceElem) {
         sourceElem.textContent = data.source;
+      } else {
+        console.warn("Popup: Missing dataSource element");
       }
     }
 
@@ -1547,74 +1596,86 @@ function updateStats(data) {
     if (exportExcelBtn) exportExcelBtn.disabled = false;
     if (clearDataBtn) clearDataBtn.disabled = false;
   } catch (error) {
-    // Unable to update stats
+    console.error("Popup: Error updating stats:", error);
   }
 }
 
-// Listen for updates from background script
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === "NEW_LEADS") {
-    // Process the data
+// Listen for messages from the content script
+chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+  // Handle lead data
+  if (message.type === "LEAD_DATA") {
     try {
-      // Check if data is too large for logging
-      const dataSize = JSON.stringify(message.data).length;
-
-      // Check if this is partial data
-      if (message.isPartialData) {
-        // Show a warning to the user
-        const warningDiv = document.createElement("div");
-        warningDiv.className = "alert alert-warning";
-        warningDiv.innerHTML = `
-          <strong>Warning:</strong> Only showing a preview of ${message.data.data.length} leads. 
-          The full dataset (${message.data.totalLeads} leads) is too large to display in the popup.
-          Please use the export function to access all leads.
-        `;
-
-        // Insert at the top of the content area
-        const contentArea = document.querySelector(".content-area");
-        if (contentArea && contentArea.firstChild) {
-          contentArea.insertBefore(warningDiv, contentArea.firstChild);
-        }
-      }
-
-      if (dataSize > 50000) {
-        console.log("Popup: Data too large to log completely");
-      } else {
-        console.log("Popup: Received data:", message.data);
-      }
-
+      // Process the data
       const processedData = processLeadData(message.data);
-      console.log("Popup: Processed message data");
 
-      // Set the global variable
-      window.currentLeadsData = processedData;
-      console.log("Popup: Set window.currentLeadsData from message");
+      // Store the data
+      chrome.storage.local.set({ leadData: processedData }, function () {
+        if (chrome.runtime.lastError) {
+          console.error(
+            "Popup: Error storing lead data:",
+            chrome.runtime.lastError
+          );
+          sendResponse({
+            status: "error",
+            message: "Error storing data: " + chrome.runtime.lastError.message,
+          });
+          return;
+        }
 
-      // Stop spinning animation on refresh button
-      const refreshBtn = document.getElementById("refreshData");
-      if (refreshBtn) {
-        refreshBtn.classList.remove("spinning");
-        refreshBtn.disabled = false;
-      }
+        // Update the UI with the new data
+        try {
+          updateLeadsDisplay(processedData);
+        } catch (displayError) {
+          console.error("Popup: Error updating leads display:", displayError);
+        }
 
-      // Update the UI with the new data
-      updateLeadsDisplay(processedData);
-
-      // Send a response back
-      sendResponse({
-        status: "success",
-        message: "Data received and processed",
+        // Send a response back
+        sendResponse({
+          status: "success",
+          message: "Data received and processed",
+        });
       });
     } catch (error) {
-      // Show error message to user
-      const errorDiv = document.createElement("div");
-      errorDiv.className = "alert alert-danger";
-      errorDiv.textContent = `Error processing data: ${error.message}`;
+      console.error("Popup: Error processing lead data:", error);
 
-      // Insert at the top of the content area
-      const contentArea = document.querySelector(".content-area");
-      if (contentArea && contentArea.firstChild) {
-        contentArea.insertBefore(errorDiv, contentArea.firstChild);
+      // Show error message to user
+      try {
+        const errorDiv = document.createElement("div");
+        errorDiv.className = "alert alert-danger";
+        errorDiv.textContent = `Error processing data: ${error.message}`;
+        errorDiv.style.padding = "10px";
+        errorDiv.style.marginBottom = "10px";
+        errorDiv.style.backgroundColor = "#f8d7da";
+        errorDiv.style.color = "#721c24";
+        errorDiv.style.borderRadius = "4px";
+        errorDiv.style.border = "1px solid #f5c6cb";
+
+        // Try to insert at the top of the content area
+        const contentArea = document.querySelector(".content-area");
+        if (contentArea) {
+          // If content area exists, insert at the beginning
+          contentArea.insertBefore(errorDiv, contentArea.firstChild);
+        } else {
+          console.warn("Popup: Could not find content-area to display error");
+
+          // Fallback: Insert after the header
+          const header = document.querySelector(".header");
+          if (header && header.parentNode) {
+            header.parentNode.insertBefore(errorDiv, header.nextSibling);
+          } else {
+            // Last resort: Insert at the beginning of the body
+            const body = document.body;
+            if (body && body.firstChild) {
+              body.insertBefore(errorDiv, body.firstChild);
+            } else {
+              console.error(
+                "Popup: Could not find any element to display error"
+              );
+            }
+          }
+        }
+      } catch (uiError) {
+        console.error("Popup: Error displaying error message:", uiError);
       }
 
       sendResponse({ status: "error", message: error.message });
@@ -1625,15 +1686,57 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // Handle progress updates
   else if (message.type === "FETCH_PROGRESS_UPDATE") {
-    console.log("Popup: Received progress update:", message.data);
-
     try {
+      if (!message.data) {
+        console.warn("Popup: Received progress update with no data");
+        sendResponse({ status: "error", message: "No progress data provided" });
+        return true;
+      }
+
+      console.log("Popup: Received progress update:", message.data);
+
+      // Check if all required elements exist before updating the UI
+      const requiredElements = [
+        "progressContainer",
+        "progressStatus",
+        "progressDetails",
+        "progressBar",
+        "progressLeadCount",
+        "progressTotalLeads",
+      ];
+
+      const missingElements = [];
+      requiredElements.forEach((id) => {
+        const element = document.getElementById(id);
+        if (!element) {
+          missingElements.push(id);
+        }
+      });
+
+      if (missingElements.length > 0) {
+        console.error(
+          `Popup: Cannot update progress UI. Missing elements: ${missingElements.join(
+            ", "
+          )}`
+        );
+        sendResponse({
+          status: "error",
+          message: `Missing UI elements: ${missingElements.join(", ")}`,
+        });
+        return true;
+      }
+
       // Update the progress UI
-      updateProgressUI(message.data);
+      try {
+        updateProgressUI(message.data);
+      } catch (progressError) {
+        console.error("Popup: Error updating progress UI:", progressError);
+      }
 
       // Send response
       sendResponse({ status: "success", message: "Progress update received" });
     } catch (error) {
+      console.error("Popup: Error handling progress update:", error);
       sendResponse({
         status: "error",
         message: "Error handling progress update: " + error.message,
