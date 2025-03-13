@@ -66,6 +66,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                   isPartialData: true,
                   originalSize: message.originalSize,
                   timestamp: new Date().toISOString(),
+                  isComplete: message.isComplete || false, // Forward the isComplete flag
                 },
                 (response) => {
                   if (chrome.runtime.lastError) {
@@ -133,6 +134,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                   data: processedData,
                   isPartialData: false,
                   timestamp: new Date().toISOString(),
+                  isComplete: message.isComplete || false, // Forward the isComplete flag
                 },
                 (response) => {
                   if (chrome.runtime.lastError) {
@@ -202,6 +204,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       );
     } catch (error) {
       // Error sending error to popup
+    }
+
+    sendResponse({ status: "success" });
+    return true;
+  } else if (message.type === "STOP_REFRESH_ANIMATION") {
+    // Forward the stop animation message to the popup
+    try {
+      chrome.runtime.sendMessage(
+        {
+          type: "STOP_REFRESH_ANIMATION",
+        },
+        (response) => {
+          if (chrome.runtime.lastError) {
+            // No popup listening or error
+            console.warn(
+              "Background: Error forwarding stop animation message to popup:",
+              chrome.runtime.lastError.message
+            );
+          }
+        }
+      );
+    } catch (error) {
+      // Error sending message to popup
+      console.error(
+        "Background: Error forwarding stop animation message:",
+        error
+      );
     }
 
     sendResponse({ status: "success" });

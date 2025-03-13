@@ -733,6 +733,7 @@ function fetchLeadData() {
                 data: summarizedData,
                 isLarge: true,
                 originalSize: dataSize,
+                isComplete: true, // Add flag to indicate fetch is complete
               },
               function (response) {
                 if (chrome.runtime.lastError) {
@@ -777,6 +778,10 @@ function fetchLeadData() {
                   status: "complete",
                   message: `Successfully fetched ${processedData.data.length} leads, but only sent summary due to size`,
                 });
+
+                // Stop refresh button animation
+                stopRefreshAnimation();
+
                 resolve(processedData);
               }
             );
@@ -786,6 +791,7 @@ function fetchLeadData() {
               {
                 type: "LEAD_DATA",
                 data: processedData,
+                isComplete: true, // Add flag to indicate fetch is complete
               },
               function (response) {
                 if (chrome.runtime.lastError) {
@@ -812,6 +818,10 @@ function fetchLeadData() {
                   status: "complete",
                   message: `Successfully fetched and processed ${processedData.data.length} leads`,
                 });
+
+                // Stop refresh button animation
+                stopRefreshAnimation();
+
                 resolve(processedData);
               }
             );
@@ -824,6 +834,10 @@ function fetchLeadData() {
               "Exception sending data to background: " +
               (error.message || "Unknown error"),
           });
+
+          // Stop refresh button animation even on error
+          stopRefreshAnimation();
+
           reject(error);
         }
       })
@@ -840,9 +854,77 @@ Progress: ${JSON.stringify(progressData)}
           error: error.message || "Unknown error fetching leads",
           endTime: new Date().toISOString(),
         });
+
+        // Stop refresh button animation on error
+        stopRefreshAnimation();
+
         reject(error);
       });
   });
+}
+
+// Function to stop refresh button animation
+function stopRefreshAnimation() {
+  // Send message to stop animation
+  chrome.runtime.sendMessage(
+    {
+      type: "STOP_REFRESH_ANIMATION",
+    },
+    function (response) {
+      if (chrome.runtime.lastError) {
+        console.warn(
+          "Warning: Could not send stop animation message:",
+          chrome.runtime.lastError.message
+        );
+      }
+    }
+  );
+
+  // Also try to find and stop animation in the DOM if this is running in a content script
+  try {
+    // Look for refresh button with common selectors
+    const refreshButtons = document.querySelectorAll(
+      '.refresh-btn, .refresh, [class*="refresh"], button[title*="refresh"], button[aria-label*="refresh"]'
+    );
+
+    if (refreshButtons.length > 0) {
+      refreshButtons.forEach((button) => {
+        // Remove any spinning or loading classes
+        button.classList.remove(
+          "spinning",
+          "loading",
+          "refreshing",
+          "rotate",
+          "animated"
+        );
+
+        // Stop any CSS animations
+        button.style.animation = "none";
+        button.style.webkitAnimation = "none";
+
+        // Remove any loading attributes
+        button.removeAttribute("data-loading");
+        button.removeAttribute("aria-busy");
+
+        // Update any loading text
+        if (button.dataset.originalText) {
+          button.textContent = button.dataset.originalText;
+        } else if (
+          button.textContent.includes("Loading") ||
+          button.textContent.includes("Refreshing")
+        ) {
+          button.textContent = "Refresh";
+        }
+
+        // Enable the button if it was disabled
+        button.disabled = false;
+      });
+
+      console.log("Stopped refresh button animation in DOM");
+    }
+  } catch (error) {
+    console.warn("Error trying to stop refresh animation in DOM:", error);
+  }
 }
 
 // Function to fetch the total count of leads

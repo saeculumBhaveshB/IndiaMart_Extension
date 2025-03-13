@@ -1684,6 +1684,82 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     return true; // Keep the message channel open for async response
   }
 
+  // Handle new leads data from background script
+  else if (message.type === "NEW_LEADS") {
+    try {
+      console.log("Popup: Received new leads data from background script");
+
+      // Process the data
+      const processedData = message.data;
+
+      // Store the current data for reference
+      window.currentLeadsData = processedData;
+
+      // Update the UI with the new data
+      try {
+        updateLeadsDisplay(processedData);
+        updateStats(processedData);
+
+        // Update progress UI to show completion
+        updateProgressUI({
+          status: "complete",
+          fetchedLeads: processedData.data ? processedData.data.length : 0,
+          totalLeads: processedData.data ? processedData.data.length : 0,
+        });
+      } catch (displayError) {
+        console.error("Popup: Error updating UI with new leads:", displayError);
+      }
+
+      // If the isComplete flag is true, stop the refresh animation
+      if (message.isComplete) {
+        console.log(
+          "Popup: Data fetch is complete, stopping refresh animation"
+        );
+
+        // Find the refresh button
+        const refreshBtn = document.getElementById("refreshData");
+
+        // Stop the animation
+        if (refreshBtn) {
+          refreshBtn.classList.remove("spinning");
+          refreshBtn.disabled = false;
+
+          // If the button has any other animation classes, remove them too
+          refreshBtn.classList.remove(
+            "loading",
+            "refreshing",
+            "rotate",
+            "animated"
+          );
+
+          // Stop any CSS animations
+          refreshBtn.style.animation = "none";
+          refreshBtn.style.webkitAnimation = "none";
+
+          console.log("Popup: Stopped refresh button animation");
+        } else {
+          console.warn(
+            "Popup: Could not find refresh button to stop animation"
+          );
+        }
+      }
+
+      // Send response
+      sendResponse({
+        status: "success",
+        message: "New leads data received and processed",
+      });
+    } catch (error) {
+      console.error("Popup: Error handling new leads data:", error);
+      sendResponse({
+        status: "error",
+        message: "Error handling new leads data: " + error.message,
+      });
+    }
+
+    return true; // Keep the message channel open for async response
+  }
+
   // Handle progress updates
   else if (message.type === "FETCH_PROGRESS_UPDATE") {
     try {
@@ -1740,6 +1816,49 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       sendResponse({
         status: "error",
         message: "Error handling progress update: " + error.message,
+      });
+    }
+
+    return true; // Keep the message channel open for async response
+  }
+
+  // Handle stop refresh animation message
+  else if (message.type === "STOP_REFRESH_ANIMATION") {
+    try {
+      console.log("Popup: Received stop refresh animation message");
+
+      // Find the refresh button
+      const refreshBtn = document.getElementById("refreshData");
+
+      // Stop the animation
+      if (refreshBtn) {
+        refreshBtn.classList.remove("spinning");
+        refreshBtn.disabled = false;
+
+        // If the button has any other animation classes, remove them too
+        refreshBtn.classList.remove(
+          "loading",
+          "refreshing",
+          "rotate",
+          "animated"
+        );
+
+        // Stop any CSS animations
+        refreshBtn.style.animation = "none";
+        refreshBtn.style.webkitAnimation = "none";
+
+        console.log("Popup: Stopped refresh button animation");
+      } else {
+        console.warn("Popup: Could not find refresh button to stop animation");
+      }
+
+      // Send response
+      sendResponse({ status: "success", message: "Refresh animation stopped" });
+    } catch (error) {
+      console.error("Popup: Error stopping refresh animation:", error);
+      sendResponse({
+        status: "error",
+        message: "Error stopping refresh animation: " + error.message,
       });
     }
 
