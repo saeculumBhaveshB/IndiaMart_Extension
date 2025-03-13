@@ -96,9 +96,9 @@ function interceptFetch() {
       if (init && init.body) {
         try {
           const requestData = JSON.parse(init.body);
-          console.log("IndiaMart Extension: Request parameters:", requestData);
+          //  console.log("IndiaMart Extension: Request parameters:", requestData);
         } catch (e) {
-          console.log("IndiaMart Extension: Could not parse request body", e);
+          //  console.log("IndiaMart Extension: Could not parse request body", e);
         }
       }
 
@@ -112,13 +112,13 @@ function interceptFetch() {
       responseClone
         .json()
         .then((data) => {
-          console.log(
-            "IndiaMart Extension: Successfully captured Lead Manager data"
-          );
-          console.log(
-            "IndiaMart Extension: Response structure:",
-            Object.keys(data)
-          );
+          // console.log(
+          //   "IndiaMart Extension: Successfully captured Lead Manager data"
+          // );
+          // console.log(
+          //   "IndiaMart Extension: Response structure:",
+          //   Object.keys(data)
+          // );
           // console.log(
           //   "IndiaMart Extension: Raw data sample:",
           //   JSON.stringify(data).substring(0, 500) + "..."
@@ -328,12 +328,12 @@ function interceptXHR() {
         if (this.readyState === 4 && this.status === 200) {
           try {
             const data = JSON.parse(this.responseText);
-            console.log("IndiaMart Extension: XHR Response received:", {
-              url: this._url,
-              status: this.status,
-              responseKeys: Object.keys(data),
-              responsePreview: JSON.stringify(data).substring(0, 200) + "...",
-            });
+            // console.log("IndiaMart Extension: XHR Response received:", {
+            //   url: this._url,
+            //   status: this.status,
+            //   responseKeys: Object.keys(data),
+            //   responsePreview: JSON.stringify(data).substring(0, 200) + "...",
+            // });
             // console.log(
             //   "IndiaMart Extension: Successfully captured Lead Manager data via XHR"
             // );
@@ -582,7 +582,7 @@ function fetchLeadData() {
       const cleanData = JSON.parse(JSON.stringify(safeProgressData));
 
       // Log the progress update
-      console.log("IndiaMart Extension: Progress update:", cleanData);
+      // console.log("IndiaMart Extension: Progress update:", cleanData);
 
       chrome.runtime.sendMessage(
         {
@@ -867,26 +867,46 @@ function fetchLeadCount() {
         return response.json();
       })
       .then((data) => {
-        console.log("IndiaMart Extension: Contact count response:", data);
+        console.log("Full API response:", data);
+
+        // Check if we have a response object
+        const responseData = data.response || data;
 
         // First try to get total_unhidden_count which is the primary count we want
-        if (data && typeof data.total_unhidden_count !== "undefined") {
-          const count = parseInt(data.total_unhidden_count);
+        if (
+          responseData &&
+          typeof responseData.total_unhidden_count !== "undefined"
+        ) {
+          const count = parseInt(responseData.total_unhidden_count);
           console.log(
             `IndiaMart Extension: Found total_unhidden_count: ${count}`
           );
           resolve(count);
         }
-        // Fall back to total_count if total_unhidden_count is not available
-        else if (data && typeof data.total_count !== "undefined") {
-          const count = parseInt(data.total_count);
-          // console.log(
-          //   `IndiaMart Extension: Using total_count as fallback: ${count}`
-          // );
+        // Fall back to total_contact_count if total_unhidden_count is not available
+        else if (
+          responseData &&
+          typeof responseData.total_contact_count !== "undefined"
+        ) {
+          const count = parseInt(responseData.total_contact_count);
+          console.log(
+            `IndiaMart Extension: Using total_contact_count as fallback: ${count}`
+          );
           resolve(count);
         }
-        // If neither is available, check for other possible count fields
-        else if (data) {
+        // Fall back to total_count if total_contact_count is not available
+        else if (
+          responseData &&
+          typeof responseData.total_count !== "undefined"
+        ) {
+          const count = parseInt(responseData.total_count);
+          console.log(
+            `IndiaMart Extension: Using total_count as fallback: ${count}`
+          );
+          resolve(count);
+        }
+        // If none of the expected fields are available, check for other possible count fields
+        else if (responseData) {
           // Look for any field that might contain the count
           const possibleCountFields = [
             "count",
@@ -897,24 +917,27 @@ function fetchLeadCount() {
           ];
 
           for (const field of possibleCountFields) {
-            if (typeof data[field] !== "undefined") {
-              const count = parseInt(data[field]);
-              // console.log(
-              //   `IndiaMart Extension: Using ${field} as count: ${count}`
-              // );
+            if (typeof responseData[field] !== "undefined") {
+              const count = parseInt(responseData[field]);
+              console.log(
+                `IndiaMart Extension: Using ${field} as count: ${count}`
+              );
               resolve(count);
               return;
             }
           }
 
           // If we still don't have a count, look for any numeric field that might be the count
-          for (const key in data) {
-            if (typeof data[key] === "number" || !isNaN(parseInt(data[key]))) {
-              const count = parseInt(data[key]);
+          for (const key in responseData) {
+            if (
+              typeof responseData[key] === "number" ||
+              !isNaN(parseInt(responseData[key]))
+            ) {
+              const count = parseInt(responseData[key]);
               if (count > 0) {
-                // console.log(
-                //   `IndiaMart Extension: Using ${key} as count: ${count}`
-                // );
+                console.log(
+                  `IndiaMart Extension: Using ${key} as count: ${count}`
+                );
                 resolve(count);
                 return;
               }
@@ -922,23 +945,23 @@ function fetchLeadCount() {
           }
 
           // Default to 100 if we can't find any count
-          // console.log(
-          //   "IndiaMart Extension: Could not find any count field, using default of 100"
-          // );
+          console.log(
+            "IndiaMart Extension: Could not find any count field, using default of 100"
+          );
           resolve(100);
         } else {
-          // console.log(
-          //   "IndiaMart Extension: Invalid response format, using default of 100"
-          // );
+          console.log(
+            "IndiaMart Extension: Invalid response format, using default of 100"
+          );
           resolve(100);
         }
       })
       .catch((error) => {
         console.error("IndiaMart Extension: Error fetching lead count:", error);
         // Default to 100 on error so we at least try to fetch some leads
-        // console.log(
-        //   "IndiaMart Extension: Using default count of 100 due to error"
-        // );
+        console.log(
+          "IndiaMart Extension: Using default count of 100 due to error"
+        );
         resolve(100);
       });
   });
@@ -1124,13 +1147,13 @@ Time: ${new Date().toISOString()}
         useDateRangeForBatch3 &&
         dateRangeParams
       ) {
-        console.log(`
-========== IndiaMart Batch ${batchNum} Special Request ==========
-Using date range parameters instead of standard pagination
-From Date: ${dateRangeParams.from_date}
-To Date: ${dateRangeParams.to_date}
-====================================================
-        `);
+        //         console.log(`
+        // ========== IndiaMart Batch ${batchNum} Special Request ==========
+        // Using date range parameters instead of standard pagination
+        // From Date: ${dateRangeParams.from_date}
+        // To Date: ${dateRangeParams.to_date}
+        // ====================================================
+        //         `);
 
         // Add date range parameters
         requestData.from_date = dateRangeParams.from_date;
@@ -1142,12 +1165,12 @@ To Date: ${dateRangeParams.to_date}
 
       // Force special handling for batch 3 if it's not already set
       if (batchNum === 3 && !useDateRangeForBatch3) {
-        console.log(`
-========== IndiaMart Batch 3 Fallback Special Request ==========
-Batch 3 detected without date range parameters set.
-Forcing date range parameters for batch 3.
-====================================================
-        `);
+        //         console.log(`
+        // ========== IndiaMart Batch 3 Fallback Special Request ==========
+        // Batch 3 detected without date range parameters set.
+        // Forcing date range parameters for batch 3.
+        // ====================================================
+        //         `);
 
         // Calculate date ranges
         const today = new Date();
@@ -1173,17 +1196,17 @@ Forcing date range parameters for batch 3.
         //         `);
       }
 
-      console.log(`
-========== IndiaMart API Request Details ==========
-Batch: ${batchNum}
-URL: https://seller.indiamart.com/lmsreact/getContactList
-Method: POST
-Request Data: ${JSON.stringify(requestData)}
-Headers: Content-Type: application/json, Accept: */*
-Credentials: include (cookies will be sent)
-Time: ${new Date().toISOString()}
-====================================================
-      `);
+      //       console.log(`
+      // ========== IndiaMart API Request Details ==========
+      // Batch: ${batchNum}
+      // URL: https://seller.indiamart.com/lmsreact/getContactList
+      // Method: POST
+      // Request Data: ${JSON.stringify(requestData)}
+      // Headers: Content-Type: application/json, Accept: */*
+      // Credentials: include (cookies will be sent)
+      // Time: ${new Date().toISOString()}
+      // ====================================================
+      //       `);
 
       fetch("https://seller.indiamart.com/lmsreact/getContactList", {
         method: "POST",
@@ -1243,40 +1266,40 @@ Time: ${new Date().toISOString()}
           return response.json();
         })
         .then((data) => {
-          console.log(`
-========== IndiaMart API Response ==========
-Batch: ${batchNum}
-Status: Success
-Response Keys: ${Object.keys(data).join(", ")}
-Response Structure: ${JSON.stringify(data).substring(0, 500)}
-===========================================
-          `);
+          //           console.log(`
+          // ========== IndiaMart API Response ==========
+          // Batch: ${batchNum}
+          // Status: Success
+          // Response Keys: ${Object.keys(data).join(", ")}
+          // Response Structure: ${JSON.stringify(data).substring(0, 500)}
+          // ===========================================
+          //           `);
 
           // For batch 2 and beyond, log more details about the response
-          if (batchNum >= 2) {
-            console.log(`
-========== IndiaMart Detailed API Response for Batch ${batchNum} ==========
-Full Response: ${JSON.stringify(data)}
-Response Type: ${typeof data}
-Has Result Property: ${data.hasOwnProperty("result")}
-Result Type: ${data.result ? typeof data.result : "N/A"}
-Result is Array: ${data.result ? Array.isArray(data.result) : "N/A"}
-Result Length: ${
-              data.result && Array.isArray(data.result)
-                ? data.result.length
-                : "N/A"
-            }
-Has Data Property: ${data.hasOwnProperty("data")}
-Data Type: ${data.data ? typeof data.data : "N/A"}
-Data is Array: ${data.data ? Array.isArray(data.data) : "N/A"}
-Data Length: ${data.data && Array.isArray(data.data) ? data.data.length : "N/A"}
-Has Error Property: ${data.hasOwnProperty("error")}
-Error Message: ${data.error || "None"}
-Has Message Property: ${data.hasOwnProperty("message")}
-Message: ${data.message || "None"}
-=======================================================================
-            `);
-          }
+          //           if (batchNum >= 2) {
+          //             console.log(`
+          // ========== IndiaMart Detailed API Response for Batch ${batchNum} ==========
+          // Full Response: ${JSON.stringify(data)}
+          // Response Type: ${typeof data}
+          // Has Result Property: ${data.hasOwnProperty("result")}
+          // Result Type: ${data.result ? typeof data.result : "N/A"}
+          // Result is Array: ${data.result ? Array.isArray(data.result) : "N/A"}
+          // Result Length: ${
+          //               data.result && Array.isArray(data.result)
+          //                 ? data.result.length
+          //                 : "N/A"
+          //             }
+          // Has Data Property: ${data.hasOwnProperty("data")}
+          // Data Type: ${data.data ? typeof data.data : "N/A"}
+          // Data is Array: ${data.data ? Array.isArray(data.data) : "N/A"}
+          // Data Length: ${data.data && Array.isArray(data.data) ? data.data.length : "N/A"}
+          // Has Error Property: ${data.hasOwnProperty("error")}
+          // Error Message: ${data.error || "None"}
+          // Has Message Property: ${data.hasOwnProperty("message")}
+          // Message: ${data.message || "None"}
+          // =======================================================================
+          //             `);
+          //           }
 
           // Extract the leads from the response
           let leads = [];
@@ -1364,25 +1387,25 @@ Will still proceed to batch 3 with date range approach.
             //             `);
           } else {
             consecutiveEmptyBatches++;
-            console.log(`
-========== IndiaMart Empty Batch Warning ==========
-Batch: ${batchNum}
-No leads found in this batch.
-Consecutive Empty Batches: ${consecutiveEmptyBatches}/${maxConsecutiveEmptyBatches}
-Last Contact Date: ${lastContactDate}
-Total Fetched: ${totalFetched}/${totalCount}
-Progress: ${((totalFetched / totalCount) * 100).toFixed(2)}%
-====================================================
-            `);
+            //             console.log(`
+            // ========== IndiaMart Empty Batch Warning ==========
+            // Batch: ${batchNum}
+            // No leads found in this batch.
+            // Consecutive Empty Batches: ${consecutiveEmptyBatches}/${maxConsecutiveEmptyBatches}
+            // Last Contact Date: ${lastContactDate}
+            // Total Fetched: ${totalFetched}/${totalCount}
+            // Progress: ${((totalFetched / totalCount) * 100).toFixed(2)}%
+            // ====================================================
+            //             `);
 
             // Special handling for batch 2 with no leads - ensure we still try batch 3
             if (batchNum === 2) {
-              console.log(`
-========== IndiaMart Batch 2 Empty Recovery ==========
-Batch 2 returned no leads. This is common with the IndiaMart API.
-Will still proceed to batch 3 with date range approach.
-====================================================
-              `);
+              //               console.log(`
+              // ========== IndiaMart Batch 2 Empty Recovery ==========
+              // Batch 2 returned no leads. This is common with the IndiaMart API.
+              // Will still proceed to batch 3 with date range approach.
+              // ====================================================
+              //               `);
               //               console.log(`
               // ========== IndiaMart Batch 2 Empty Recovery ==========
               // Batch 2 returned no leads. This is common with the IndiaMart API.
@@ -2003,7 +2026,7 @@ function extractLeadData(isRefresh) {
       const cleanData = JSON.parse(JSON.stringify(safeProgressData));
 
       // Log the progress update
-      console.log("IndiaMart Extension: Progress update:", cleanData);
+      // console.log("IndiaMart Extension: Progress update:", cleanData);
 
       chrome.runtime.sendMessage(
         {
