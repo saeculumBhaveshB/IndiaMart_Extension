@@ -1088,9 +1088,7 @@ function fetchAllLeads(totalCount, updateProgress) {
     const toDateStr = today.toISOString().split("T")[0];
     const fromDateStr = thirtyDaysAgo.toISOString().split("T")[0];
 
-    // Override parameters for batch 3
-    const batch3Start = 1;
-    const batch3End = 100;
+    // Save the original last_contact_date
     const originalLastContactDate = lastContactDate || "";
 
     // Set flag and parameters for date range approach
@@ -1105,7 +1103,6 @@ function fetchAllLeads(totalCount, updateProgress) {
     // Manual trigger parameters for batch 3:
     // From Date: ${fromDateStr}
     // To Date: ${toDateStr}
-    // Start/End: ${batch3Start}/${batch3End}
     // Original Last Contact Date (saved): ${originalLastContactDate}
     // ====================================================
     //     `);
@@ -1119,13 +1116,19 @@ function fetchAllLeads(totalCount, updateProgress) {
       const savedEnd = currentEnd;
       const savedLastContactDate = lastContactDate;
 
-      // Set parameters for batch 3
-      currentStart = batch3Start;
-      currentEnd = batch3End;
+      // Set parameters for batch 3 - only reset lastContactDate
       lastContactDate = "";
 
-      // Process batch 3
-      processBatch(3);
+      // Create a completely new batch 3 with no start/end parameters
+      const batch3Request = {
+        type: 0,
+        last_contact_date: "",
+        from_date: fromDateStr,
+        to_date: toDateStr,
+      };
+
+      // Process batch 3 with a custom request object
+      processBatchWithCustomRequest(3, batch3Request);
 
       // Schedule restoration of original parameters for batch 4
       setTimeout(() => {
@@ -1243,6 +1246,10 @@ Time: ${new Date().toISOString()}
 
         // Remove or reset other parameters that might conflict
         requestData.last_contact_date = "";
+
+        // Always remove start/end parameters for date range requests to prevent duplicates
+        delete requestData.start;
+        delete requestData.end;
       }
 
       // Force special handling for batch 3 if it's not already set
@@ -1270,6 +1277,19 @@ Time: ${new Date().toISOString()}
         // Remove or reset other parameters that might conflict
         requestData.last_contact_date = "";
 
+        // When using date range parameters, we don't need start/end parameters
+        // This prevents duplicate parameters in the request
+        delete requestData.start;
+        delete requestData.end;
+
+        // Set the flag for future reference
+        useDateRangeForBatch3 = true;
+        dateRangeParams = {
+          from_date: fromDateStr,
+          to_date: toDateStr,
+          skipStartEnd: true,
+        };
+
         //         console.log(`
         // Fallback date range for batch 3:
         // From Date: ${fromDateStr}
@@ -1278,6 +1298,27 @@ Time: ${new Date().toISOString()}
         //         `);
       }
 
+      // Process the batch with the prepared request data
+      processBatchRequest(batchNum, requestData);
+    }
+
+    // Function to process a batch with a custom request object
+    function processBatchWithCustomRequest(batchNum, customRequestData) {
+      console.log(`
+========== IndiaMart Batch ${batchNum} Started (Custom Request) ==========
+Custom Request: ${JSON.stringify(customRequestData)}
+Total Fetched So Far: ${totalFetched}/${totalCount}
+Remaining: ${totalCount - totalFetched}
+Time: ${new Date().toISOString()}
+====================================================
+      `);
+
+      // Process the batch with the custom request data
+      processBatchRequest(batchNum, customRequestData);
+    }
+
+    // Function to handle the actual API request and response processing
+    function processBatchRequest(batchNum, requestData) {
       //       console.log(`
       // ========== IndiaMart API Request Details ==========
       // Batch: ${batchNum}
@@ -1503,12 +1544,18 @@ Will still proceed to batch 3 with date range approach.
 
           completedBatches++;
 
-          // Update progress for UI
-          updateProgress({
-            completedBatches: completedBatches,
-            totalBatches: Math.ceil(totalCount / batchSize),
-            fetchedLeads: totalFetched,
-          });
+          // Safely update progress for UI
+          try {
+            if (typeof updateProgress === "function") {
+              updateProgress({
+                completedBatches: completedBatches,
+                totalBatches: Math.ceil(totalCount / batchSize),
+                fetchedLeads: totalFetched,
+              });
+            }
+          } catch (progressError) {
+            console.error("Error updating progress:", progressError);
+          }
 
           // DIRECT TRIGGER FOR BATCH 3
           // If this is batch 2 completing, immediately trigger batch 3 with date range parameters
@@ -1529,10 +1576,10 @@ Will still proceed to batch 3 with date range approach.
             const toDateStr = today.toISOString().split("T")[0];
             const fromDateStr = thirtyDaysAgo.toISOString().split("T")[0];
 
-            // Override parameters for batch 3
-            currentStart = 1;
-            currentEnd = 100;
+            // Save the original last_contact_date
             const originalLastContactDate = lastContactDate;
+
+            // Reset last_contact_date for date range approach
             lastContactDate = "";
 
             // Set flag and parameters for date range approach
@@ -1547,7 +1594,6 @@ Will still proceed to batch 3 with date range approach.
             // Direct trigger parameters for batch 3:
             // From Date: ${fromDateStr}
             // To Date: ${toDateStr}
-            // Start/End: ${currentStart}/${currentEnd}
             // Last Contact Date: ${lastContactDate}
             // Original Last Contact Date (saved): ${originalLastContactDate}
             // ====================================================
@@ -1564,7 +1610,17 @@ Will still proceed to batch 3 with date range approach.
               // console.log(
               //   "DIRECT BATCH 3 TRIGGER: Executing batch 3 after delay"
               // );
-              processBatch(3); // Explicitly use 3 instead of completedBatches + 1
+
+              // Create a completely new batch 3 with no start/end parameters
+              const batch3Request = {
+                type: 0,
+                last_contact_date: "",
+                from_date: fromDateStr,
+                to_date: toDateStr,
+              };
+
+              // Process batch 3 with a custom request object
+              processBatchWithCustomRequest(3, batch3Request);
             }, 1000);
 
             // Skip the normal continuation logic
@@ -1637,10 +1693,6 @@ Will still proceed to batch 3 with date range approach.
               const toDateStr = today.toISOString().split("T")[0];
               const fromDateStr = thirtyDaysAgo.toISOString().split("T")[0];
 
-              // Override the request parameters for batch 3
-              currentStart = 1; // Reset to 1
-              currentEnd = 100; // Use standard batch size
-
               // Store the original last_contact_date in case we need it later
               const originalLastContactDate = lastContactDate;
 
@@ -1660,16 +1712,24 @@ Will still proceed to batch 3 with date range approach.
               // Using date range instead of last_contact_date
               // From Date: ${fromDateStr}
               // To Date: ${toDateStr}
-              // Start/End: ${currentStart}/${currentEnd}
               // Last Contact Date: ${lastContactDate}
               // Original Last Contact Date (saved): ${originalLastContactDate}
               // ====================================================
               //               `);
 
-              // Add a debug log to confirm we're about to process batch 3
-              // console.log(
-              //   "BATCH DEBUG: About to process batch 3 after batch 2 success"
-              // );
+              // Create a completely new batch 3 with no start/end parameters
+              const batch3Request = {
+                type: 0,
+                last_contact_date: "",
+                from_date: fromDateStr,
+                to_date: toDateStr,
+              };
+
+              // Process batch 3 with a custom request object
+              processBatchWithCustomRequest(3, batch3Request);
+
+              // Skip the normal continuation logic
+              return;
             }
 
             // Special handling for batch 4 (after batch 3)
@@ -1801,10 +1861,10 @@ Time: ${new Date().toISOString()}
             const toDateStr = today.toISOString().split("T")[0];
             const fromDateStr = thirtyDaysAgo.toISOString().split("T")[0];
 
-            // Override parameters for batch 3
-            currentStart = 1;
-            currentEnd = 100;
+            // Save the original last_contact_date
             const originalLastContactDate = lastContactDate;
+
+            // Reset last_contact_date for date range approach
             lastContactDate = "";
 
             // Set flag and parameters for date range approach
@@ -1819,7 +1879,6 @@ Time: ${new Date().toISOString()}
             // Direct trigger parameters for batch 3 after error:
             // From Date: ${fromDateStr}
             // To Date: ${toDateStr}
-            // Start/End: ${currentStart}/${currentEnd}
             // Last Contact Date: ${lastContactDate}
             // Original Last Contact Date (saved): ${originalLastContactDate}
             // ====================================================
@@ -1840,17 +1899,35 @@ Time: ${new Date().toISOString()}
               // console.log(
               //   "DIRECT BATCH 3 TRIGGER: Executing batch 3 after delay"
               // );
-              processBatch(3); // Explicitly use 3 instead of completedBatches + 1
+
+              // Create a completely new batch 3 with no start/end parameters
+              const batch3Request = {
+                type: 0,
+                last_contact_date: "",
+                from_date: fromDateStr,
+                to_date: toDateStr,
+              };
+
+              // Process batch 3 with a custom request object
+              processBatchWithCustomRequest(3, batch3Request);
             }, 1000);
             return; // Skip the normal error handling
           }
 
           completedBatches++;
-          updateProgress({
-            completedBatches: completedBatches,
-            totalBatches: Math.ceil(totalCount / batchSize),
-            error: `Batch ${batchNum} failed: ${error.message}`,
-          });
+
+          // Safely update progress for UI
+          try {
+            if (typeof updateProgress === "function") {
+              updateProgress({
+                completedBatches: completedBatches,
+                totalBatches: Math.ceil(totalCount / batchSize),
+                error: `Batch ${batchNum} failed: ${error.message}`,
+              });
+            }
+          } catch (progressError) {
+            console.error("Error updating progress:", progressError);
+          }
 
           // Determine if we should continue despite the error
           if (
