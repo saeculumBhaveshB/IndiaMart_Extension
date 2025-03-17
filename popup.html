@@ -142,10 +142,27 @@
     /* Refresh button animation */
     #refreshData {
       transition: transform 0.3s ease;
+      position: relative;
     }
     
     #refreshData.spinning {
       animation: spin 1s linear infinite;
+      pointer-events: none;
+      background-color: #f0f0f0;
+    }
+    
+    #refreshData.spinning .refresh-icon {
+      fill: #4285f4;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    #refreshData:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
     
     /* Leads table styles */
@@ -295,7 +312,7 @@
     <div class="lead-count">
       <span>Total Leads: <span id="totalLeads">0</span></span>
       <button id="refreshData" class="refresh-btn" title="Refresh Data">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="refresh-icon">
           <path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
         </svg>
       </button>
@@ -358,5 +375,6 @@
   <!-- Add SheetJS library for Excel export (local version) -->
   <script src="xlsx.full.min.js"></script>
   <script src="popup.js"></script>
+  <script src="fix_refresh_button.js"></script>
 </body>
 </html> 

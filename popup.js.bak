@@ -1036,7 +1036,6 @@ function processLeadData(rawData) {
       if (Array.isArray(rawData[key])) {
         return { data: rawData[key] };
       }
-    }
 
     // If no arrays found, wrap the object itself
     return { data: [rawData] };

@@ -916,6 +916,9 @@ function stopRefreshAnimation() {
           button.textContent = "Refresh";
         }
 
+        // Reset tooltip
+        button.title = "Refresh Data";
+
         // Enable the button if it was disabled
         button.disabled = false;
       });
