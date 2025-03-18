@@ -522,9 +522,35 @@ Note: The formatting for bold headers couldn't be applied due to browser limitat
 // Function to clear stored data
 function clearStoredData() {
   if (confirm("Are you sure you want to clear all stored lead data?")) {
-    chrome.storage.local.remove("indiamartLeads", function () {
-      window.currentLeadsData = null;
-      updateLeadsDisplay(null);
+    // Immediately clear local data and update UI for responsive feedback
+    window.currentLeadsData = null;
+    updateLeadsDisplay(null);
+
+    // Hide progress UI if visible
+    const progressContainer = document.getElementById("progressContainer");
+    if (progressContainer) {
+      progressContainer.style.display = "none";
+    }
+
+    // Stop refresh animation if it's running
+    const refreshBtn = document.getElementById("refreshData");
+    if (refreshBtn) {
+      refreshBtn.classList.remove("spinning");
+      refreshBtn.disabled = false;
+      refreshBtn.title = "Refresh Data";
+    }
+
+    // Clear data from storage first to ensure UI is responsive
+    chrome.storage.local.remove("indiamartLeads");
+
+    // Cancel any in-progress API calls with highest priority
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+      if (tabs && tabs[0] && tabs[0].id) {
+        chrome.tabs.sendMessage(tabs[0].id, {
+          action: "CANCEL_API_CALLS",
+          priority: "high",
+        });
+      }
     });
   }
 }
