@@ -521,112 +521,12 @@ Note: The formatting for bold headers couldn't be applied due to browser limitat
 
 // Function to clear stored data
 function clearStoredData() {
-  if (
-    confirm(
-      "Are you sure you want to clear all stored lead data?\nThis will also stop any ongoing API calls."
-    )
-  ) {
-    // First, update UI to show we're processing
-    const progressContainer = document.getElementById("progressContainer");
-    if (progressContainer) {
-      const progressStatus = document.getElementById("progressStatus");
-      const progressBar = document.getElementById("progressBar");
-
-      progressContainer.style.display = "block";
-      progressStatus.textContent = "Stopping API calls...";
-      progressBar.style.width = "50%";
-    }
-
-    // First, send a message to stop any ongoing API calls
-    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-      if (!tabs || tabs.length === 0) {
-        // If no active tab is found, proceed with just clearing the data
-        clearLeadData();
-        return;
-      }
-
-      // Send message to content script to stop API calls
-      chrome.tabs.sendMessage(
-        tabs[0].id,
-        { action: "STOP_API_CALLS" },
-        function (response) {
-          // Check for error (like when the content script is not loaded on the page)
-          if (chrome.runtime.lastError) {
-            console.log("Error stopping API calls:", chrome.runtime.lastError);
-          } else {
-            console.log("API call stop response:", response);
-
-            // Update progress UI
-            if (progressContainer) {
-              const progressStatus = document.getElementById("progressStatus");
-              const progressBar = document.getElementById("progressBar");
-
-              progressStatus.textContent =
-                "API calls stopped, clearing data...";
-              progressBar.style.width = "75%";
-            }
-          }
-
-          // Short delay to ensure API calls are fully stopped
-          setTimeout(() => {
-            // Always proceed with clearing the data, even if stopping API calls failed
-            clearLeadData();
-
-            // Update progress UI one last time
-            if (progressContainer) {
-              const progressStatus = document.getElementById("progressStatus");
-              const progressBar = document.getElementById("progressBar");
-
-              progressStatus.textContent = "Data cleared successfully";
-              progressBar.style.width = "100%";
-              progressContainer.classList.add("success");
-
-              // Hide progress after a delay
-              setTimeout(() => {
-                progressContainer.style.display = "none";
-                progressContainer.classList.remove("success");
-              }, 2000);
-            }
-          }, 500); // Half-second delay to ensure API calls are stopped
-        }
-      );
+  if (confirm("Are you sure you want to clear all stored lead data?")) {
+    chrome.storage.local.remove("indiamartLeads", function () {
+      window.currentLeadsData = null;
+      updateLeadsDisplay(null);
     });
   }
-}
-
-// Helper function to clear lead data
-function clearLeadData() {
-  // Clear the stored data
-  chrome.storage.local.remove("indiamartLeads", function () {
-    // Reset progress UI if it's visible
-    const progressContainer = document.getElementById("progressContainer");
-    if (progressContainer && progressContainer.style.display !== "block") {
-      progressContainer.style.display = "none";
-    }
-
-    // Reset any UI elements showing data is being fetched
-    const refreshButton = document.getElementById("refreshData");
-    if (refreshButton) {
-      refreshButton.classList.remove("spinning");
-      refreshButton.disabled = false;
-    }
-
-    // Also remove any data source and last updated info
-    const dataSource = document.getElementById("dataSource");
-    const lastUpdated = document.getElementById("lastUpdated");
-    if (dataSource) dataSource.textContent = "-";
-    if (lastUpdated) lastUpdated.textContent = "-";
-
-    // Reset any error messages or notifications
-    const contentArea = document.querySelector(".content-area");
-    if (contentArea) {
-      contentArea.innerHTML = "";
-    }
-
-    // Reset the global data and update display
-    window.currentLeadsData = null;
-    updateLeadsDisplay(null);
-  });
 }
 
 // Function to directly upload data to Google Sheets
@@ -1890,86 +1790,51 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
       console.log("Popup: Received progress update:", message.data);
 
-      // Update the progress UI
-      updateProgressUI(message.data);
+      // Check if all required elements exist before updating the UI
+      const requiredElements = [
+        "progressContainer",
+        "progressStatus",
+        "progressDetails",
+        "progressBar",
+        "progressLeadCount",
+        "progressTotalLeads",
+      ];
 
-      sendResponse({ status: "success" });
+      const missingElements = [];
+      requiredElements.forEach((id) => {
+        const element = document.getElementById(id);
+        if (!element) {
+          missingElements.push(id);
+        }
+      });
+
+      if (missingElements.length > 0) {
+        console.error(
+          `Popup: Cannot update progress UI. Missing elements: ${missingElements.join(
+            ", "
+          )}`
+        );
+        sendResponse({
+          status: "error",
+          message: `Missing UI elements: ${missingElements.join(", ")}`,
+        });
+        return true;
+      }
+
+      // Update the progress UI
+      try {
+        updateProgressUI(message.data);
+      } catch (progressError) {
+        console.error("Popup: Error updating progress UI:", progressError);
+      }
+
+      // Send response
+      sendResponse({ status: "success", message: "Progress update received" });
     } catch (error) {
       console.error("Popup: Error handling progress update:", error);
       sendResponse({
         status: "error",
         message: "Error handling progress update: " + error.message,
-      });
-    }
-
-    return true; // Keep the message channel open for async response
-  }
-
-  // Handle the case where an API call is already in progress
-  else if (message.type === "API_ALREADY_IN_PROGRESS") {
-    try {
-      console.log("Popup: API call already in progress, updating UI");
-
-      // Show alert to user
-      const contentArea = document.querySelector(".content-area");
-      if (contentArea) {
-        const alertDiv = document.createElement("div");
-        alertDiv.className = "alert alert-warning";
-        alertDiv.textContent =
-          "An API call is already in progress. Please wait for it to complete.";
-        alertDiv.style.padding = "10px";
-        alertDiv.style.marginBottom = "10px";
-        alertDiv.style.backgroundColor = "#fff3cd";
-        alertDiv.style.color = "#856404";
-        alertDiv.style.borderRadius = "4px";
-        alertDiv.style.border = "1px solid #ffeeba";
-
-        // Add a dismiss button
-        const dismissBtn = document.createElement("button");
-        dismissBtn.textContent = "✕";
-        dismissBtn.style.float = "right";
-        dismissBtn.style.background = "none";
-        dismissBtn.style.border = "none";
-        dismissBtn.style.color = "#856404";
-        dismissBtn.style.fontWeight = "bold";
-        dismissBtn.style.cursor = "pointer";
-        dismissBtn.onclick = function () {
-          alertDiv.remove();
-        };
-
-        alertDiv.prepend(dismissBtn);
-        contentArea.insertBefore(alertDiv, contentArea.firstChild);
-
-        // Auto-dismiss after 5 seconds
-        setTimeout(() => {
-          if (alertDiv.parentNode) {
-            alertDiv.remove();
-          }
-        }, 5000);
-      }
-
-      // Update the refresh button state
-      const refreshBtn = document.getElementById("refreshData");
-      if (refreshBtn) {
-        refreshBtn.classList.remove("spinning");
-        refreshBtn.disabled = false;
-        refreshBtn.title = "Refresh Data"; // Reset tooltip
-      }
-
-      // Update progress UI to show the "in progress" state
-      updateProgressUI({
-        status: "already_in_progress",
-        message:
-          "API call already in progress. Please wait for the current operation to complete.",
-      });
-
-      sendResponse({ status: "success" });
-    } catch (error) {
-      console.error("Popup: Error handling API already in progress:", error);
-      sendResponse({
-        status: "error",
-        message:
-          "Error handling API already in progress message: " + error.message,
       });
     }
 
