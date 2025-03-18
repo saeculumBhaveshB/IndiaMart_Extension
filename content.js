@@ -81,6 +81,30 @@ function ensureCorrectDataStructure(data) {
   return { data: [] };
 }
 
+// Global flag to track if API calls should be stopped
+let stopApiCalls = false;
+
+// Global flag to track if an API call is in progress
+let apiCallInProgress = false;
+
+// Function to stop ongoing API calls
+function stopOngoingApiCalls() {
+  stopApiCalls = true;
+  console.log("IndiaMart Extension: Stopping ongoing API calls");
+
+  // Clear any pending setTimeout calls for next batches
+  if (window.pendingBatchTimeout) {
+    clearTimeout(window.pendingBatchTimeout);
+    window.pendingBatchTimeout = null;
+    console.log("IndiaMart Extension: Cleared pending batch timeout");
+  }
+
+  // Reset the API call in progress flag
+  apiCallInProgress = false;
+
+  return true; // Return true to indicate success
+}
+
 // Function to intercept fetch requests
 function interceptFetch() {
   const originalFetch = window.fetch;
@@ -414,7 +438,7 @@ function interceptXHR() {
                       return;
                     }
 
-                    // console.log(`
+                    //                 console.log(`
                     // ========== IndiaMart Data Sent to Background (Summarized) ==========
                     // Response: ${JSON.stringify(response)}
                     // Time: ${new Date().toISOString()}
@@ -441,6 +465,10 @@ function interceptXHR() {
                       status: "complete",
                       message: `Successfully fetched ${processedData.data.length} leads, but only sent summary due to size`,
                     });
+
+                    // Stop refresh button animation
+                    stopRefreshAnimation();
+
                     resolve(processedData);
                   }
                 );
@@ -466,7 +494,7 @@ function interceptXHR() {
                       reject(chrome.runtime.lastError);
                       return;
                     }
-                    // console.log(`
+                    //                 console.log(`
                     // ========== IndiaMart Data Sent to Background ==========
                     // Response: ${JSON.stringify(response)}
                     // Time: ${new Date().toISOString()}
@@ -476,6 +504,10 @@ function interceptXHR() {
                       status: "complete",
                       message: `Successfully fetched and processed ${processedData.data.length} leads`,
                     });
+
+                    // Stop refresh button animation
+                    stopRefreshAnimation();
+
                     resolve(processedData);
                   }
                 );
@@ -488,6 +520,10 @@ function interceptXHR() {
                   "Exception sending data to background: " +
                   (error.message || "Unknown error"),
               });
+
+              // Stop refresh button animation even on error
+              stopRefreshAnimation();
+
               reject(error);
             }
           } catch (err) {
@@ -543,6 +579,46 @@ function interceptXHR() {
 
 // Function to manually fetch lead data
 function fetchLeadData() {
+  // Check if an API call is already in progress
+  if (apiCallInProgress) {
+    console.log(
+      "IndiaMart Extension: API call already in progress, not starting a new one"
+    );
+
+    // Notify that an API call is already in progress
+    try {
+      chrome.runtime.sendMessage({
+        type: "FETCH_PROGRESS",
+        data: {
+          status: "already_in_progress",
+          message:
+            "API call already in progress. Please wait for the current operation to complete.",
+          timestamp: new Date().toISOString(),
+        },
+      });
+
+      // Also try to update the refresh button state
+      chrome.runtime.sendMessage({
+        type: "API_ALREADY_IN_PROGRESS",
+      });
+    } catch (error) {
+      console.error("Error sending 'already in progress' message:", error);
+    }
+
+    // Return a rejected promise to indicate that we didn't start a new fetch
+    return Promise.reject(new Error("API call already in progress"));
+  }
+
+  // Reset the flags when starting a new fetch sequence
+  stopApiCalls = false;
+  apiCallInProgress = true; // Mark that an API call is now in progress
+
+  // Reset any pending batch timeout
+  if (window.pendingBatchTimeout) {
+    clearTimeout(window.pendingBatchTimeout);
+    window.pendingBatchTimeout = null;
+  }
+
   // console.log(`
   // ========== IndiaMart Lead Fetch Started ==========
   // Time: ${new Date().toISOString()}
@@ -562,6 +638,18 @@ function fetchLeadData() {
 
   // Update progress and notify popup
   function updateProgress(update) {
+    // If API calls have been stopped, don't update progress anymore
+    if (
+      stopApiCalls &&
+      update.status !== "error" &&
+      update.status !== "complete"
+    ) {
+      console.log(
+        "IndiaMart Extension: Skipping progress update because API calls were stopped"
+      );
+      return;
+    }
+
     progressData = { ...progressData, ...update };
 
     try {
@@ -933,6 +1021,15 @@ function stopRefreshAnimation() {
 // Function to fetch the total count of leads
 function fetchLeadCount() {
   return new Promise((resolve, reject) => {
+    // If API calls have been stopped, resolve with 0
+    if (stopApiCalls) {
+      console.log(
+        "IndiaMart Extension: Skipping lead count fetch because API calls were stopped"
+      );
+      resolve(0);
+      return;
+    }
+
     console.log(
       "IndiaMart Extension: Fetching total lead count from contactCount API"
     );
@@ -1027,7 +1124,6 @@ function fetchLeadCount() {
                 return;
               }
             }
-          }
 
           // Default to 100 if we can't find any count
           console.log(
@@ -1054,15 +1150,20 @@ function fetchLeadCount() {
 
 // Function to fetch all leads in batches
 function fetchAllLeads(totalCount, updateProgress) {
+  // If API calls have been stopped, return empty array immediately
+  if (stopApiCalls) {
+    console.log(
+      "IndiaMart Extension: Skipping lead fetch because API calls were stopped"
+    );
+    return Promise.resolve([]);
+  }
+
   const batchSize = 100; // Number of leads to fetch per request
   const allLeads = [];
   let lastContactDate = ""; // Initialize with an empty string for the first batch
   let currentStart = 1;
   let currentEnd = batchSize;
   let totalFetched = 0;
-
-  // Flag to track if an API call is in progress
-  let apiCallInProgress = false;
 
   // Helper function to extract last_contact_date from a lead
   function getLastContactDate(lead) {
@@ -1100,6 +1201,16 @@ function fetchAllLeads(totalCount, updateProgress) {
 
     // Function to process each batch
     function processBatch(batchNum) {
+      // If API calls are stopped, don't continue
+      if (stopApiCalls) {
+        console.log(
+          `API calls have been stopped by user. Aborting batch ${batchNum}.`
+        );
+        apiCallInProgress = false;
+        resolve(allLeads); // Resolve with whatever data we have so far
+        return;
+      }
+
       // If an API call is already in progress, don't start another one
       if (apiCallInProgress) {
         console.warn(
@@ -1110,6 +1221,16 @@ function fetchAllLeads(totalCount, updateProgress) {
 
       // Set the flag to indicate an API call is in progress
       apiCallInProgress = true;
+
+      // Check again if API calls were stopped between function entry and here
+      if (stopApiCalls) {
+        console.log(
+          `API calls have been stopped. Aborting batch ${batchNum} before fetch.`
+        );
+        apiCallInProgress = false;
+        resolve(allLeads);
+        return;
+      }
 
       console.log(`
 ========== IndiaMart Batch ${batchNum} Started ==========
@@ -1193,12 +1314,21 @@ Time: ${new Date().toISOString()}
             consecutiveEmptyBatches < maxConsecutiveEmptyBatches;
 
           // Add a 2-second delay before processing the next batch
-          if (shouldContinue) {
+          if (shouldContinue && !stopApiCalls) {
             console.log(
               `Adding a 2-second delay before processing the next batch`
             );
 
-            setTimeout(() => {
+            // Store the timeout reference so we can cancel it if needed
+            window.pendingBatchTimeout = setTimeout(() => {
+              // Check again if API calls have been stopped before proceeding
+              if (stopApiCalls) {
+                console.log(
+                  "API calls were stopped during timeout, not proceeding with next batch"
+                );
+                return;
+              }
+
               // Update start and end for the next batch
               currentStart = currentEnd + 1;
               currentEnd = currentStart + batchSize - 1;
@@ -1230,6 +1360,7 @@ Time: ${new Date().toISOString()}
 
           // Determine if we should continue despite the error
           if (
+            !stopApiCalls &&
             completedBatches < Math.ceil(totalCount / batchSize) &&
             totalFetched < totalCount
           ) {
@@ -1237,7 +1368,16 @@ Time: ${new Date().toISOString()}
               `Adding a 2-second delay before trying the next batch after an error`
             );
 
-            setTimeout(() => {
+            // Store the timeout reference so we can cancel it if needed
+            window.pendingBatchTimeout = setTimeout(() => {
+              // Check again if API calls have been stopped before proceeding
+              if (stopApiCalls) {
+                console.log(
+                  "API calls were stopped during timeout, not proceeding with next batch after error"
+                );
+                return;
+              }
+
               // Update start and end for the next batch
               currentStart = currentEnd + 1;
               currentEnd = currentStart + batchSize - 1;
@@ -1393,6 +1533,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Try to fetch the lead data
     fetchLeadData();
     sendResponse({ status: "fetching" });
+  } else if (message.action === "STOP_API_CALLS") {
+    const result = stopOngoingApiCalls();
+    sendResponse({ success: result });
+    return true; // Indicate we'll respond asynchronously
   }
 });
 
@@ -1430,7 +1574,15 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       })
       .catch((error) => {
         console.error("Content script: Error extracting lead data:", error);
-        // Try to notify the popup about the error
+
+        // Check if this is the "already in progress" error
+        if (error.message === "API call already in progress") {
+          // This specific error is already handled by fetchLeadData function
+          // which sends the appropriate message to the popup
+          return;
+        }
+
+        // For other errors, try to notify the popup about the error
         try {
           chrome.runtime.sendMessage({
             type: "FETCH_ERROR",
@@ -1538,6 +1690,16 @@ function extractLeadData(isRefresh) {
       return processedData;
     })
     .catch((error) => {
+      // Check if this is due to an API call already in progress
+      if (error.message === "API call already in progress") {
+        console.log(
+          "Content script: API call already in progress, not starting a new one"
+        );
+        // This was already handled in fetchLeadData which sent the appropriate messages
+        // Re-throw the error so the caller knows what happened
+        throw error;
+      }
+
       console.error(
         "Content script: Error extracting lead data via API:",
         error
@@ -1551,79 +1713,6 @@ function extractLeadData(isRefresh) {
       // If API approach fails, try to extract from the page as fallback
       return new Promise((resolve, reject) => {
         try {
-          updateProgress({ status: "checking_window_object" });
-
-          // First, try to find data in the global window object (IndiaMart often stores data here)
-          if (window.leadData || window.LEAD_DATA || window.leads) {
-            const rawData = window.leadData || window.LEAD_DATA || window.leads;
-            // console.log("Content script: Found lead data in window object");
-
-            // Process the data
-            let processedData = [];
-            if (Array.isArray(rawData)) {
-              processedData = rawData;
-            } else if (typeof rawData === "object" && rawData !== null) {
-              // If it's an object, look for arrays inside it
-              for (const key in rawData) {
-                if (Array.isArray(rawData[key]) && rawData[key].length > 0) {
-                  processedData = rawData[key];
-                  break;
-                }
-              }
-
-              // If we still don't have an array, add the object itself
-              if (processedData.length === 0) {
-                processedData = [rawData];
-              }
-            }
-
-            updateProgress({
-              status: "processing",
-              source: "window_object",
-              fetchedLeads: processedData.length,
-            });
-
-            const result = {
-              data: processedData,
-              timestamp: new Date().toISOString(),
-              source: "window_object",
-              isRefresh: isRefresh,
-              totalLeads: processedData.length,
-            };
-
-            updateProgress({ status: "sending" });
-
-            // Send the fallback data to the background script
-            chrome.runtime.sendMessage(
-              {
-                type: "LEAD_DATA",
-                data: result,
-                isRefresh: isRefresh,
-              },
-              function (response) {
-                if (chrome.runtime.lastError) {
-                  console.error(
-                    "Error sending fallback data to background:",
-                    chrome.runtime.lastError
-                  );
-                  updateProgress({
-                    status: "error",
-                    error:
-                      "Failed to send data to background: " +
-                      (chrome.runtime.lastError.message || "Unknown error"),
-                  });
-                } else {
-                  updateProgress({
-                    status: "complete",
-                    message: `Successfully extracted ${processedData.length} leads from window object`,
-                  });
-                }
-                resolve(result);
-              }
-            );
-            return;
-          }
-
           updateProgress({ status: "checking_dom" });
 
           // If not found in window object, try to extract from the DOM
