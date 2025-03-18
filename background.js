@@ -154,39 +154,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         );
       }
     } catch (error) {
+      console.error("Error in background script:", error);
       sendResponse({
         status: "error",
-        message: "Error processing data: " + error.message,
+        message: error.message || "Unknown error in background script",
       });
     }
 
-    // Return true to indicate we'll send a response asynchronously
-    return true;
+    return true; // Keep the message channel open for async response
   } else if (message.type === "FETCH_PROGRESS") {
-    // Forward progress updates to the popup
     try {
-      chrome.runtime.sendMessage(
-        {
-          type: "FETCH_PROGRESS_UPDATE",
-          data: message.data,
-        },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            // No popup listening or error
-            console.warn(
-              "Background: Error forwarding progress update to popup:",
-              chrome.runtime.lastError.message
-            );
-          }
-        }
-      );
+      // Forward the progress data to any open popups
+      chrome.runtime.sendMessage({
+        type: "FETCH_PROGRESS_UPDATE",
+        data: message.data,
+      });
+
+      sendResponse({ status: "success" });
     } catch (error) {
-      // Error sending progress to popup
-      console.error("Background: Error forwarding progress update:", error);
+      console.error("Error forwarding progress update:", error);
+      sendResponse({ status: "error", message: error.message });
     }
 
-    sendResponse({ status: "success" });
-    return true;
+    return true; // Keep the message channel open for async response
   } else if (message.type === "FETCH_ERROR") {
     // Forward error messages to the popup
     try {
@@ -235,6 +225,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     sendResponse({ status: "success" });
     return true;
+  } else if (message.type === "API_CANCELLED") {
+    try {
+      // Forward the cancellation notification to any open popups with high priority
+      chrome.runtime.sendMessage({
+        type: "API_CANCELLED_NOTIFICATION",
+        timestamp: message.timestamp,
+        forceUpdate: true,
+        success: message.success || true,
+        message: message.message || "API calls cancelled",
+      });
+
+      // Also clear data from storage to ensure UI is in sync
+      chrome.storage.local.remove(["indiamartLeads", "leadData"], function () {
+        console.log("Background: Storage cleared after API cancellation");
+      });
+
+      // Respond to the content script
+      sendResponse({ status: "success" });
+    } catch (error) {
+      console.error("Error forwarding API cancellation notification:", error);
+      sendResponse({ status: "error", message: error.message });
+    }
+
+    return true; // Keep the message channel open for async response
   }
 });
 

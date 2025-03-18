@@ -414,7 +414,7 @@ function interceptXHR() {
                       return;
                     }
 
-                    // console.log(`
+                    //                 console.log(`
                     // ========== IndiaMart Data Sent to Background (Summarized) ==========
                     // Response: ${JSON.stringify(response)}
                     // Time: ${new Date().toISOString()}
@@ -470,7 +470,7 @@ function interceptXHR() {
                       reject(chrome.runtime.lastError);
                       return;
                     }
-                    // console.log(`
+                    //                 console.log(`
                     // ========== IndiaMart Data Sent to Background ==========
                     // Response: ${JSON.stringify(response)}
                     // Time: ${new Date().toISOString()}
@@ -1512,6 +1512,25 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
           console.error("Error aborting API calls:", e);
         }
       }
+
+      // Immediately send a message to the background script to notify of cancellation
+      chrome.runtime.sendMessage(
+        {
+          type: "API_CANCELLED",
+          timestamp: new Date().toISOString(),
+          success: true,
+          message: "API calls forcefully cancelled",
+        },
+        function () {
+          // Clear any data in local storage as well
+          try {
+            localStorage.removeItem("indiamartFullLeads");
+            localStorage.removeItem("indiamartLeads");
+          } catch (storageError) {
+            console.error("Error clearing localStorage:", storageError);
+          }
+        }
+      );
     }
 
     console.log(
@@ -1519,12 +1538,13 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       message.priority || "normal"
     );
 
-    // Send response back to popup
+    // Send response back to popup immediately
     if (sendResponse) {
       sendResponse({
-        status: "cancelling",
-        message: "Cancelling any in-progress API calls",
+        status: "cancelled", // Changed from "cancelling" to indicate completion
+        message: "API calls cancelled successfully",
         timestamp: new Date().toISOString(),
+        success: true,
       });
     }
   }
