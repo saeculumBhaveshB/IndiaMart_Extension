@@ -1120,6 +1120,8 @@ function fetchAllLeads(totalCount, updateProgress) {
         if (currentFetchAbortController) {
           currentFetchAbortController.abort();
         }
+        // Clear the allLeads array when cancelled
+        allLeads.length = 0;
         resolve(allLeads);
         return;
       }
@@ -1224,6 +1226,8 @@ function fetchAllLeads(totalCount, updateProgress) {
                 if (currentFetchAbortController) {
                   currentFetchAbortController.abort();
                 }
+                // Clear the allLeads array when cancelled during delay
+                allLeads.length = 0;
                 resolve(allLeads);
                 return;
               }
@@ -1248,6 +1252,8 @@ function fetchAllLeads(totalCount, updateProgress) {
           ) {
             console.log("Fetch was cancelled by user");
             isFetchingInProgress = false;
+            // Clear the allLeads array when cancelled due to error
+            allLeads.length = 0;
             resolve(allLeads);
             return;
           }
@@ -1283,6 +1289,8 @@ function fetchAllLeads(totalCount, updateProgress) {
                 if (currentFetchAbortController) {
                   currentFetchAbortController.abort();
                 }
+                // Clear the allLeads array when cancelled during error delay
+                allLeads.length = 0;
                 resolve(allLeads);
                 return;
               }
@@ -1305,9 +1313,11 @@ function fetchAllLeads(totalCount, updateProgress) {
 
 // Update the cancelLeadFetch function to handle both flags
 function cancelLeadFetch() {
+  console.log("IndiaMart Extension: Starting cancellation process");
+
+  // Set both flags to stop any ongoing or future fetches
   fetchCancelled = true;
   isFetchingInProgress = false;
-  console.log("IndiaMart Extension: Cancelling ongoing lead fetch");
 
   // Abort any in-progress fetch request
   if (currentFetchAbortController) {
@@ -1329,6 +1339,87 @@ function cancelLeadFetch() {
   } catch (error) {
     console.error("IndiaMart Extension: Error clearing stored data:", error);
   }
+
+  // Clear any refresh intervals
+  if (window.leadManagerRefreshInterval) {
+    clearInterval(window.leadManagerRefreshInterval);
+    window.leadManagerRefreshInterval = null;
+    console.log("IndiaMart Extension: Cleared refresh interval");
+  }
+
+  // Clear all data structures that might be holding leads
+  try {
+    // Clear the leads list from the DOM
+    const leadListContainers = document.querySelectorAll(
+      '.lead-list, .leads-container, [class*="lead-list"], [class*="leads-container"], table tbody'
+    );
+
+    if (leadListContainers.length > 0) {
+      leadListContainers.forEach((container) => {
+        container.innerHTML = "";
+        console.log("IndiaMart Extension: Cleared leads list from DOM");
+      });
+    }
+
+    // Clear any data in the window object
+    if (window.leadData) delete window.leadData;
+    if (window.LEAD_DATA) delete window.LEAD_DATA;
+    if (window.leads) delete window.leads;
+    console.log("IndiaMart Extension: Cleared leads data from window object");
+
+    // Clear any arrays or objects that might be holding leads
+    if (window.allLeads) window.allLeads = [];
+    if (window.processedLeads) window.processedLeads = [];
+    if (window.leadArray) window.leadArray = [];
+    if (window.leadsArray) window.leadsArray = [];
+    console.log("IndiaMart Extension: Cleared leads arrays");
+
+    // Clear any data in the global scope
+    if (typeof allLeads !== "undefined") allLeads = [];
+    if (typeof processedLeads !== "undefined") processedLeads = [];
+    if (typeof leadArray !== "undefined") leadArray = [];
+    if (typeof leadsArray !== "undefined") leadsArray = [];
+    console.log("IndiaMart Extension: Cleared global leads arrays");
+
+    // Clear any data in the React state if it exists
+    if (window.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
+      const reactInstances =
+        window.__REACT_DEVTOOLS_GLOBAL_HOOK__.getFiberRoots();
+      reactInstances.forEach((instance) => {
+        if (instance && instance.current && instance.current.stateNode) {
+          const stateNode = instance.current.stateNode;
+          if (stateNode.state && stateNode.state.leads) {
+            stateNode.state.leads = [];
+          }
+        }
+      });
+    }
+    console.log("IndiaMart Extension: Cleared React state leads data");
+  } catch (error) {
+    console.error(
+      "IndiaMart Extension: Error clearing data structures:",
+      error
+    );
+  }
+
+  // Send message to background script to clear data
+  chrome.runtime.sendMessage(
+    {
+      type: "CLEAR_LEADS_DATA",
+    },
+    function (response) {
+      if (chrome.runtime.lastError) {
+        console.error(
+          "IndiaMart Extension: Error clearing data in background:",
+          chrome.runtime.lastError
+        );
+      } else {
+        console.log(
+          "IndiaMart Extension: Successfully cleared data in background"
+        );
+      }
+    }
+  );
 
   return fetchCancelled;
 }
@@ -1967,3 +2058,56 @@ window.addEventListener("beforeunload", function () {
   interceptXHR();
   createLeadManagerObserver();
 })();
+
+// Function to update the leads list in the DOM
+function updateLeadsList(leads) {
+  // Look for the leads list container
+  const leadListContainers = document.querySelectorAll(
+    '.lead-list, .leads-container, [class*="lead-list"], [class*="leads-container"], table tbody'
+  );
+
+  if (leadListContainers.length > 0) {
+    leadListContainers.forEach((container) => {
+      // Clear the container's content
+      container.innerHTML = "";
+
+      if (leads.length === 0) {
+        // Create a message container with styling
+        const messageContainer = document.createElement("div");
+        messageContainer.style.cssText = `
+          text-align: center;
+          padding: 20px;
+          color: #666;
+          font-size: 14px;
+          background: #f9f9f9;
+          border-radius: 4px;
+          margin: 10px 0;
+        `;
+
+        // Create the message text
+        const messageText = document.createElement("p");
+        messageText.textContent =
+          "No leads found. Click the refresh button to fetch the latest leads.";
+        messageContainer.appendChild(messageText);
+
+        // Add a hint about the refresh button
+        const hintText = document.createElement("p");
+        hintText.style.cssText = `
+          margin-top: 8px;
+          font-size: 12px;
+          color: #999;
+        `;
+        hintText.textContent =
+          "Tip: The refresh button is located in the top-right corner.";
+        messageContainer.appendChild(hintText);
+
+        container.appendChild(messageContainer);
+      } else {
+        // Process and display leads as before
+        leads.forEach((lead) => {
+          // ... existing lead processing code ...
+        });
+      }
+    });
+  }
+}
