@@ -5,6 +5,8 @@ function updateLeadsDisplay(data, page = 1) {
     const exportCSVBtn = document.getElementById("exportCSV");
     const exportExcelBtn = document.getElementById("exportExcel");
     const clearDataBtn = document.getElementById("clearData");
+    const directUploadBtn = document.getElementById("directUpload");
+    const transferSheetsBtn = document.getElementById("transferSheets");
     const leadsTable = document.getElementById("leadsTable");
     const leadsPerPage = 100; // Show 100 leads per page
 
@@ -19,6 +21,8 @@ function updateLeadsDisplay(data, page = 1) {
       if (exportCSVBtn) exportCSVBtn.disabled = true;
       if (exportExcelBtn) exportExcelBtn.disabled = true;
       if (clearDataBtn) clearDataBtn.disabled = true;
+      if (directUploadBtn) directUploadBtn.disabled = true;
+      if (transferSheetsBtn) transferSheetsBtn.disabled = true;
 
       // Show empty table message if table exists
       if (leadsTable) {
@@ -51,6 +55,8 @@ function updateLeadsDisplay(data, page = 1) {
           if (exportCSVBtn) exportCSVBtn.disabled = true;
           if (exportExcelBtn) exportExcelBtn.disabled = true;
           if (clearDataBtn) clearDataBtn.disabled = true;
+          if (directUploadBtn) directUploadBtn.disabled = true;
+          if (transferSheetsBtn) transferSheetsBtn.disabled = true;
 
           // Show empty table message if table exists
           if (leadsTable) {
@@ -65,6 +71,8 @@ function updateLeadsDisplay(data, page = 1) {
         if (exportCSVBtn) exportCSVBtn.disabled = true;
         if (exportExcelBtn) exportExcelBtn.disabled = true;
         if (clearDataBtn) clearDataBtn.disabled = true;
+        if (directUploadBtn) directUploadBtn.disabled = true;
+        if (transferSheetsBtn) transferSheetsBtn.disabled = true;
 
         // Show empty table message if table exists
         if (leadsTable) {
@@ -84,6 +92,8 @@ function updateLeadsDisplay(data, page = 1) {
       if (exportCSVBtn) exportCSVBtn.disabled = true;
       if (exportExcelBtn) exportExcelBtn.disabled = true;
       if (clearDataBtn) clearDataBtn.disabled = true;
+      if (directUploadBtn) directUploadBtn.disabled = true;
+      if (transferSheetsBtn) transferSheetsBtn.disabled = true;
 
       // Show empty table message if table exists
       if (leadsTable) {
@@ -94,23 +104,15 @@ function updateLeadsDisplay(data, page = 1) {
       return;
     }
 
-    // Check if originalTotalCount exists and is a number
-    if (
-      processedData.originalTotalCount &&
-      typeof processedData.originalTotalCount === "number"
-    ) {
-      // Use originalTotalCount for the total leads count
-      if (totalLeadsSpan)
-        totalLeadsSpan.textContent = processedData.originalTotalCount;
-    } else {
-      // Use the length of the leads array
-      if (totalLeadsSpan) totalLeadsSpan.textContent = leads.length;
-    }
-
-    // Enable export buttons
+    // Enable all buttons if we have data
     if (exportCSVBtn) exportCSVBtn.disabled = false;
     if (exportExcelBtn) exportExcelBtn.disabled = false;
     if (clearDataBtn) clearDataBtn.disabled = false;
+    if (directUploadBtn) directUploadBtn.disabled = false;
+    if (transferSheetsBtn) transferSheetsBtn.disabled = false;
+
+    // Update total leads count
+    if (totalLeadsSpan) totalLeadsSpan.textContent = leads.length;
 
     // Update the table if it exists
     if (leadsTable) {
@@ -742,7 +744,7 @@ function performDirectUpload(sheetId, scriptId, sheetUrl) {
     rows.push(row);
   }
 
-  // Show loading state
+  // Show loading state with progress tracking
   const loadingDiv = document.createElement("div");
   loadingDiv.id = "loadingOverlay";
   loadingDiv.style.position = "fixed";
@@ -761,9 +763,30 @@ function performDirectUpload(sheetId, scriptId, sheetUrl) {
   loadingContent.style.padding = "20px";
   loadingContent.style.borderRadius = "5px";
   loadingContent.style.textAlign = "center";
+  loadingContent.style.minWidth = "300px";
 
   const loadingText = document.createElement("p");
-  loadingText.textContent = `Uploading ${leads.length} leads to Google Sheets...`;
+  loadingText.id = "loadingStatus";
+  loadingText.textContent = `Preparing to upload ${leads.length} leads to Google Sheets...`;
+
+  const progressBar = document.createElement("div");
+  progressBar.style.width = "100%";
+  progressBar.style.height = "20px";
+  progressBar.style.backgroundColor = "#f0f0f0";
+  progressBar.style.borderRadius = "10px";
+  progressBar.style.overflow = "hidden";
+  progressBar.style.margin = "10px 0";
+
+  const progressFill = document.createElement("div");
+  progressFill.id = "progressFill";
+  progressFill.style.width = "0%";
+  progressFill.style.height = "100%";
+  progressFill.style.backgroundColor = "#4285f4";
+  progressFill.style.transition = "width 0.3s ease";
+
+  const progressText = document.createElement("p");
+  progressText.id = "progressText";
+  progressText.textContent = "0%";
 
   const spinner = document.createElement("div");
   spinner.style.border = "4px solid #f3f3f3";
@@ -780,13 +803,30 @@ function performDirectUpload(sheetId, scriptId, sheetUrl) {
     "@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }";
   document.head.appendChild(style);
 
+  progressBar.appendChild(progressFill);
   loadingContent.appendChild(spinner);
   loadingContent.appendChild(loadingText);
+  loadingContent.appendChild(progressBar);
+  loadingContent.appendChild(progressText);
   loadingDiv.appendChild(loadingContent);
   document.body.appendChild(loadingDiv);
 
   // Use the Google Apps Script web app URL to upload the data
   const scriptUrl = `https://script.google.com/macros/s/${scriptId}/exec`;
+
+  // Update progress
+  function updateProgress(percent, status) {
+    const progressFill = document.getElementById("progressFill");
+    const progressText = document.getElementById("progressText");
+    const loadingStatus = document.getElementById("loadingStatus");
+
+    if (progressFill) progressFill.style.width = `${percent}%`;
+    if (progressText) progressText.textContent = `${percent}%`;
+    if (loadingStatus) loadingStatus.textContent = status;
+  }
+
+  // Start the upload process
+  updateProgress(0, "Starting upload...");
 
   fetch(scriptUrl, {
     method: "POST",
@@ -800,25 +840,30 @@ function performDirectUpload(sheetId, scriptId, sheetUrl) {
       },
     }),
   })
-    .then((response) => response.json())
+    .then((response) => {
+      updateProgress(50, "Processing response...");
+      return response.json();
+    })
     .then((data) => {
       // Remove loading overlay
       document.body.removeChild(loadingDiv);
 
       if (data.status === "success") {
+        updateProgress(100, "Upload completed successfully!");
         alert(
           `Successfully uploaded ${leads.length} leads to your Google Sheet!`
         );
         // Open the sheet in a new tab
         chrome.tabs.create({ url: sheetUrl });
       } else {
-        alert(`Error: ${data.message || "Unknown error occurred"}`);
+        throw new Error(data.message || "Unknown error occurred");
       }
     })
     .catch((error) => {
       // Remove loading overlay
       document.body.removeChild(loadingDiv);
 
+      console.error("Upload error:", error);
       alert(`Error uploading data: ${error.message}`);
 
       // Fallback to clipboard method
@@ -1460,6 +1505,9 @@ document.addEventListener("DOMContentLoaded", function () {
     addClickListener("exportExcel", exportAsExcel);
     addClickListener("clearData", clearStoredData);
     addClickListener("refreshData", refreshData);
+    addClickListener("directUpload", directUploadToSheets);
+    addClickListener("transferSheets", showTransferToSheets);
+    addClickListener("confirmTransfer", handleTransferConfirm);
   } catch (error) {
     alert("Error initializing extension popup: " + error.message);
   }

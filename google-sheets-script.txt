@@ -3,6 +3,7 @@
 // Then deploy it as a web app to get a URL that can be used by the extension
 
 function doGet(e) {
+  console.log('Received GET request - this endpoint only accepts POST requests');
   return ContentService.createTextOutput(JSON.stringify({
     status: 'error',
     message: 'This endpoint only accepts POST requests'
@@ -10,65 +11,41 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  console.log('Received POST request');
   try {
     // Get the sheet ID from the request parameters or payload
     let sheetId;
     let parsedData;
     
-    // Check if the data is coming from URL parameters or POST body
-    if (e.parameter && e.parameter.sheetId) {
-      // Data from URL parameters (form submission)
-      sheetId = e.parameter.sheetId;
-      
-      // Get the data from the request
-      const data = e.postData.contents;
-      if (!data) {
-        return ContentService.createTextOutput(JSON.stringify({
-          status: 'error',
-          message: 'No data provided'
-        })).setMimeType(ContentService.MimeType.JSON);
-      }
-      
-      // Parse the data
-      try {
-        parsedData = JSON.parse(data);
-      } catch (error) {
-        return ContentService.createTextOutput(JSON.stringify({
-          status: 'error',
-          message: 'Invalid JSON data: ' + error.message
-        })).setMimeType(ContentService.MimeType.JSON);
-      }
-    } else if (e.postData && e.postData.contents) {
-      // Data from POST body (direct API call)
-      const requestData = JSON.parse(e.postData.contents);
-      sheetId = requestData.sheetId;
-      parsedData = requestData.data;
-      
-      if (!sheetId) {
-        return ContentService.createTextOutput(JSON.stringify({
-          status: 'error',
-          message: 'No sheet ID provided in request body'
-        })).setMimeType(ContentService.MimeType.JSON);
-      }
-      
-      if (!parsedData) {
-        return ContentService.createTextOutput(JSON.stringify({
-          status: 'error',
-          message: 'No data provided in request body'
-        })).setMimeType(ContentService.MimeType.JSON);
-      }
-    } else {
+    // Parse the request data
+    const requestData = JSON.parse(e.postData.contents);
+    sheetId = requestData.sheetId;
+    parsedData = requestData.data;
+    
+    if (!sheetId) {
+      console.log('Error: No sheet ID provided in request body');
       return ContentService.createTextOutput(JSON.stringify({
         status: 'error',
-        message: 'No data or sheet ID provided'
+        message: 'No sheet ID provided in request body'
       })).setMimeType(ContentService.MimeType.JSON);
     }
     
+    if (!parsedData) {
+      console.log('Error: No data provided in request body');
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'error',
+        message: 'No data provided in request body'
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    console.log('Opening spreadsheet with ID:', sheetId);
     // Open the spreadsheet
     let spreadsheet;
     try {
       spreadsheet = SpreadsheetApp.openById(sheetId);
+      console.log('Successfully opened spreadsheet');
     } catch (error) {
+      console.log('Error opening spreadsheet:', error.message);
       return ContentService.createTextOutput(JSON.stringify({
         status: 'error',
         message: 'Could not open spreadsheet: ' + error.message
@@ -77,19 +54,24 @@ function doPost(e) {
     
     // Get the first sheet
     let sheet = spreadsheet.getSheets()[0];
+    console.log('Got first sheet');
     
     // Clear the sheet
     sheet.clear();
+    console.log('Cleared existing data');
     
     // Check if we have data rows directly or need to extract them
     let rows = [];
     
     if (Array.isArray(parsedData.data)) {
+      console.log('Processing direct array data');
       // Data is already in the expected format
       rows = parsedData.data;
     } else if (parsedData.data && Array.isArray(parsedData.data.data)) {
+      console.log('Processing nested data structure');
       // Data is nested one level deeper
       const leads = parsedData.data.data;
+      console.log('Found', leads.length, 'leads to process');
       
       // Define the specific fields to include
       const specificFields = [
@@ -115,6 +97,7 @@ function doPost(e) {
       
       // Add headers as first row
       rows.push(friendlyHeaders);
+      console.log('Added headers');
       
       // Prepare the data rows with only the specific fields
       for (let i = 0; i < leads.length; i++) {
@@ -135,7 +118,9 @@ function doPost(e) {
         
         rows.push(row);
       }
+      console.log('Processed all leads');
     } else {
+      console.log('Error: Invalid data format');
       return ContentService.createTextOutput(JSON.stringify({
         status: 'error',
         message: 'Invalid data format'
@@ -144,6 +129,7 @@ function doPost(e) {
     
     // Set the data in the sheet
     if (rows.length > 0) {
+      console.log('Setting data in sheet, total rows:', rows.length);
       // Set the headers in the sheet
       const headerRange = sheet.getRange(1, 1, 1, rows[0].length);
       headerRange.setValues([rows[0]]);
@@ -151,18 +137,22 @@ function doPost(e) {
       // Format the headers with bold and larger font
       headerRange.setFontWeight('bold');
       headerRange.setFontSize(12); // Increase font size
+      console.log('Formatted headers');
       
       // Set the data rows
       if (rows.length > 1) {
         sheet.getRange(2, 1, rows.length - 1, rows[0].length).setValues(rows.slice(1));
+        console.log('Set data rows');
       }
       
       // Auto-resize columns
       for (let i = 1; i <= rows[0].length; i++) {
         sheet.autoResizeColumn(i);
       }
+      console.log('Auto-resized columns');
     }
     
+    console.log('Data import completed successfully');
     // Set CORS headers for cross-domain requests
     const output = ContentService.createTextOutput(JSON.stringify({
       status: 'success',
@@ -173,6 +163,7 @@ function doPost(e) {
     return output;
     
   } catch (error) {
+    console.log('Unexpected error:', error.message);
     return ContentService.createTextOutput(JSON.stringify({
       status: 'error',
       message: 'An unexpected error occurred: ' + error.message
