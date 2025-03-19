@@ -522,9 +522,68 @@ Note: The formatting for bold headers couldn't be applied due to browser limitat
 // Function to clear stored data
 function clearStoredData() {
   if (confirm("Are you sure you want to clear all stored lead data?")) {
-    chrome.storage.local.remove("indiamartLeads", function () {
-      window.currentLeadsData = null;
-      updateLeadsDisplay(null);
+    // First, try to cancel any ongoing fetch operations
+    chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+      if (tabs && tabs.length > 0) {
+        // Send message to content script to cancel lead fetching
+        chrome.tabs.sendMessage(
+          tabs[0].id,
+          { action: "CANCEL_FETCH" },
+          function (response) {
+            console.log("Cancellation response:", response);
+
+            // Whether cancellation succeeded or not, proceed with clearing data
+            chrome.storage.local.remove("indiamartLeads", function () {
+              window.currentLeadsData = null;
+              updateLeadsDisplay(null);
+
+              // Show a success message to the user
+              const progressContainer =
+                document.getElementById("progressContainer");
+              const progressStatus = document.getElementById("progressStatus");
+              const progressDetails =
+                document.getElementById("progressDetails");
+
+              if (progressContainer && progressStatus && progressDetails) {
+                progressContainer.style.display = "block";
+                progressContainer.classList.remove("error");
+                progressContainer.classList.add("success");
+                progressStatus.textContent = "Data Cleared";
+                progressDetails.textContent =
+                  "All lead data and ongoing fetches have been cancelled";
+
+                // Hide the message after 3 seconds
+                setTimeout(() => {
+                  progressContainer.style.display = "none";
+                }, 3000);
+              }
+            });
+          }
+        );
+      } else {
+        // If no active tab, just clear the data
+        chrome.storage.local.remove("indiamartLeads", function () {
+          window.currentLeadsData = null;
+          updateLeadsDisplay(null);
+
+          // Show a success message
+          const progressContainer =
+            document.getElementById("progressContainer");
+          const progressStatus = document.getElementById("progressStatus");
+
+          if (progressContainer && progressStatus) {
+            progressContainer.style.display = "block";
+            progressContainer.classList.remove("error");
+            progressContainer.classList.add("success");
+            progressStatus.textContent = "Data Cleared";
+
+            // Hide the message after 3 seconds
+            setTimeout(() => {
+              progressContainer.style.display = "none";
+            }, 3000);
+          }
+        });
+      }
     });
   }
 }
