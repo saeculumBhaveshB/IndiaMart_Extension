@@ -1,47 +1,33 @@
 // Function to update the leads display
 function updateLeadsDisplay(data, page = 1) {
-  console.log(
-    "UPDATE DISPLAY: Called with data:",
-    data ? "data exists" : "null data"
-  );
-
   try {
     const totalLeadsSpan = document.getElementById("totalLeads");
     const exportCSVBtn = document.getElementById("exportCSV");
     const exportExcelBtn = document.getElementById("exportExcel");
     const clearDataBtn = document.getElementById("clearData");
+    const directUploadBtn = document.getElementById("directUpload");
+    const transferSheetsBtn = document.getElementById("transferSheets");
     const leadsTable = document.getElementById("leadsTable");
-    const dataSourceSpan = document.getElementById("dataSource");
-    const lastUpdatedSpan = document.getElementById("lastUpdated");
     const leadsPerPage = 100; // Show 100 leads per page
 
-    // If no data is provided, use the global variable ONLY if explicitly requested
-    if (!data && window.currentLeadsData && typeof page !== "undefined") {
+    // If no data is provided, use the global variable
+    if (!data && window.currentLeadsData) {
       data = window.currentLeadsData;
-      console.log("UPDATE DISPLAY: Using currentLeadsData");
     }
 
     // Check if we have valid data
-    if (
-      !data ||
-      !data.data ||
-      !Array.isArray(data.data) ||
-      data.data.length === 0
-    ) {
-      console.log("UPDATE DISPLAY: No valid data, clearing display");
-      // Clear all UI elements when data is null or empty
+    if (!data) {
       if (totalLeadsSpan) totalLeadsSpan.textContent = "0";
       if (exportCSVBtn) exportCSVBtn.disabled = true;
       if (exportExcelBtn) exportExcelBtn.disabled = true;
       if (clearDataBtn) clearDataBtn.disabled = true;
-      if (dataSourceSpan) dataSourceSpan.textContent = "None";
-      if (lastUpdatedSpan) lastUpdatedSpan.textContent = "Never";
+      if (directUploadBtn) directUploadBtn.disabled = true;
+      if (transferSheetsBtn) transferSheetsBtn.disabled = true;
 
       // Show empty table message if table exists
       if (leadsTable) {
         leadsTable.innerHTML =
-          '<tr><td colspan="5" class="no-leads-message">Data cleared. Click refresh to fetch new leads.</td></tr>';
-        console.log("UPDATE DISPLAY: Table cleared");
+          '<tr><td colspan="5" class="no-leads-message">No leads available. Click refresh to fetch leads.</td></tr>';
       }
 
       return;
@@ -69,6 +55,8 @@ function updateLeadsDisplay(data, page = 1) {
           if (exportCSVBtn) exportCSVBtn.disabled = true;
           if (exportExcelBtn) exportExcelBtn.disabled = true;
           if (clearDataBtn) clearDataBtn.disabled = true;
+          if (directUploadBtn) directUploadBtn.disabled = true;
+          if (transferSheetsBtn) transferSheetsBtn.disabled = true;
 
           // Show empty table message if table exists
           if (leadsTable) {
@@ -83,6 +71,8 @@ function updateLeadsDisplay(data, page = 1) {
         if (exportCSVBtn) exportCSVBtn.disabled = true;
         if (exportExcelBtn) exportExcelBtn.disabled = true;
         if (clearDataBtn) clearDataBtn.disabled = true;
+        if (directUploadBtn) directUploadBtn.disabled = true;
+        if (transferSheetsBtn) transferSheetsBtn.disabled = true;
 
         // Show empty table message if table exists
         if (leadsTable) {
@@ -102,6 +92,8 @@ function updateLeadsDisplay(data, page = 1) {
       if (exportCSVBtn) exportCSVBtn.disabled = true;
       if (exportExcelBtn) exportExcelBtn.disabled = true;
       if (clearDataBtn) clearDataBtn.disabled = true;
+      if (directUploadBtn) directUploadBtn.disabled = true;
+      if (transferSheetsBtn) transferSheetsBtn.disabled = true;
 
       // Show empty table message if table exists
       if (leadsTable) {
@@ -112,23 +104,15 @@ function updateLeadsDisplay(data, page = 1) {
       return;
     }
 
-    // Check if originalTotalCount exists and is a number
-    if (
-      processedData.originalTotalCount &&
-      typeof processedData.originalTotalCount === "number"
-    ) {
-      // Use originalTotalCount for the total leads count
-      if (totalLeadsSpan)
-        totalLeadsSpan.textContent = processedData.originalTotalCount;
-    } else {
-      // Use the length of the leads array
-      if (totalLeadsSpan) totalLeadsSpan.textContent = leads.length;
-    }
-
-    // Enable export buttons
+    // Enable all buttons if we have data
     if (exportCSVBtn) exportCSVBtn.disabled = false;
     if (exportExcelBtn) exportExcelBtn.disabled = false;
     if (clearDataBtn) clearDataBtn.disabled = false;
+    if (directUploadBtn) directUploadBtn.disabled = false;
+    if (transferSheetsBtn) transferSheetsBtn.disabled = false;
+
+    // Update total leads count
+    if (totalLeadsSpan) totalLeadsSpan.textContent = leads.length;
 
     // Update the table if it exists
     if (leadsTable) {
@@ -537,170 +521,72 @@ Note: The formatting for bold headers couldn't be applied due to browser limitat
     });
 }
 
-// Set a flag to track if data has been cleared by user
-let dataWasCleared = false;
-
 // Function to clear stored data
 function clearStoredData() {
   if (confirm("Are you sure you want to clear all stored lead data?")) {
-    // Set a persistent flag in localStorage to remember data was cleared
-    try {
-      localStorage.setItem("indiamartDataCleared", "true");
-      console.log("CLEARING DATA: Set persistent cleared flag in localStorage");
-    } catch (e) {
-      console.error("Error setting localStorage flag:", e);
-    }
-
-    // Set memory flag
-    dataWasCleared = true;
-    console.log("CLEARING DATA: Starting clear process");
-
-    // 1. First, nullify the global data variable
-    window.currentLeadsData = null;
-    console.log("CLEARING DATA: Nullified currentLeadsData");
-
-    // 2. Directly clear the table and set a mutation observer to keep it cleared
-    const leadsTable = document.getElementById("leadsTable");
-    if (leadsTable) {
-      const clearTableContent = function () {
-        leadsTable.innerHTML =
-          '<tr><td colspan="5" class="no-leads-message">Data cleared. Click refresh to fetch new leads.</td></tr>';
-        console.log("CLEARING DATA: Table content cleared or re-cleared");
-      };
-
-      // Apply clear immediately
-      clearTableContent();
-
-      // Set up mutation observer to prevent anyone from modifying the table
-      // This is a very aggressive approach to ensure the table stays cleared
-      if (!window.tableObserver) {
-        window.tableObserver = new MutationObserver(function (mutations) {
-          // If we detect changes to the table while in cleared state,
-          // force it back to cleared state
-          if (
-            dataWasCleared ||
-            localStorage.getItem("indiamartDataCleared") === "true"
-          ) {
-            console.log(
-              "MUTATION OBSERVER: Detected change to table while in cleared state, re-clearing"
-            );
-            clearTableContent();
-          }
-        });
-
-        // Start observing the table for all changes
-        window.tableObserver.observe(leadsTable, {
-          childList: true,
-          subtree: true,
-          characterData: true,
-          attributes: true,
-        });
-
-        console.log(
-          "CLEARING DATA: Added mutation observer to prevent table changes"
-        );
-      }
-    }
-
-    // 3. Reset all counters and metadata display
-    const totalLeadsSpan = document.getElementById("totalLeads");
-    if (totalLeadsSpan) totalLeadsSpan.textContent = "0";
-
-    const dataSourceSpan = document.getElementById("dataSource");
-    if (dataSourceSpan) dataSourceSpan.textContent = "None";
-
-    const lastUpdatedSpan = document.getElementById("lastUpdated");
-    if (lastUpdatedSpan) lastUpdatedSpan.textContent = "Never";
-
-    // 4. Disable export buttons
-    const exportCSVBtn = document.getElementById("exportCSV");
-    const exportExcelBtn = document.getElementById("exportExcel");
-    const clearDataBtn = document.getElementById("clearData");
-    if (exportCSVBtn) exportCSVBtn.disabled = true;
-    if (exportExcelBtn) exportExcelBtn.disabled = true;
-    if (clearDataBtn) clearDataBtn.disabled = true;
-
-    // 5. Clear any progress UI
-    const progressContainer = document.getElementById("progressContainer");
-    if (progressContainer) {
-      progressContainer.style.display = "none";
-      console.log("CLEARING DATA: Progress container hidden");
-    }
-
-    // 6. Stop refresh animation
-    const refreshBtn = document.getElementById("refreshData");
-    if (refreshBtn) {
-      refreshBtn.classList.remove("spinning");
-      refreshBtn.disabled = false;
-      refreshBtn.title = "Refresh Data";
-      console.log("CLEARING DATA: Refresh animation stopped");
-    }
-
-    // 7. Aggressively clear storage using all possible methods
-    const clearStoragePromise = new Promise((resolve) => {
-      chrome.storage.local.remove(["indiamartLeads", "leadData"], function () {
-        console.log("CLEARING DATA: Chrome storage cleared successfully");
-        resolve();
-      });
-    });
-
-    // Also clear sessionStorage
-    try {
-      sessionStorage.removeItem("indiamartLeads");
-      sessionStorage.removeItem("leadData");
-      console.log("CLEARING DATA: Session storage cleared");
-    } catch (e) {
-      console.error("Error clearing sessionStorage:", e);
-    }
-
-    // Set up a repeating clear every 100ms for 1 second to ensure nothing reloads the data
-    let clearCount = 0;
-    const intervalId = setInterval(function () {
-      // Reset the memory flag in case something changed it
-      dataWasCleared = true;
-
-      // Check localStorage flag and reset if needed
-      if (localStorage.getItem("indiamartDataCleared") !== "true") {
-        localStorage.setItem("indiamartDataCleared", "true");
-      }
-
-      // Re-clear the table
-      if (leadsTable) {
-        leadsTable.innerHTML =
-          '<tr><td colspan="5" class="no-leads-message">Data cleared. Click refresh to fetch new leads.</td></tr>';
-      }
-
-      // Clear storage again
-      chrome.storage.local.remove(["indiamartLeads", "leadData"]);
-
-      clearCount++;
-      if (clearCount >= 10) {
-        clearInterval(intervalId);
-        console.log("CLEARING DATA: Finished aggressive clearing cycle");
-      }
-    }, 100);
-
-    // 10. Cancel API calls
+    // First, try to cancel any ongoing fetch operations
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-      if (tabs && tabs[0] && tabs[0].id) {
+      if (tabs && tabs.length > 0) {
+        // Send message to content script to cancel lead fetching
         chrome.tabs.sendMessage(
           tabs[0].id,
-          {
-            action: "CANCEL_API_CALLS",
-            priority: "high",
-          },
+          { action: "CANCEL_FETCH" },
           function (response) {
-            console.log(
-              "CLEARING DATA: Cancel API response received",
-              response
-            );
+            console.log("Cancellation response:", response);
+
+            // Whether cancellation succeeded or not, proceed with clearing data
+            chrome.storage.local.remove("indiamartLeads", function () {
+              window.currentLeadsData = null;
+              updateLeadsDisplay(null);
+
+              // Show a success message to the user
+              const progressContainer =
+                document.getElementById("progressContainer");
+              const progressStatus = document.getElementById("progressStatus");
+              const progressDetails =
+                document.getElementById("progressDetails");
+
+              if (progressContainer && progressStatus && progressDetails) {
+                progressContainer.style.display = "block";
+                progressContainer.classList.remove("error");
+                progressContainer.classList.add("success");
+                progressStatus.textContent = "Data Cleared";
+                progressDetails.textContent =
+                  "All lead data and ongoing fetches have been cancelled";
+
+                // Hide the message after 3 seconds
+                setTimeout(() => {
+                  progressContainer.style.display = "none";
+                }, 3000);
+              }
+            });
           }
         );
-        console.log("CLEARING DATA: Cancel API message sent");
+      } else {
+        // If no active tab, just clear the data
+        chrome.storage.local.remove("indiamartLeads", function () {
+          window.currentLeadsData = null;
+          updateLeadsDisplay(null);
+
+          // Show a success message
+          const progressContainer =
+            document.getElementById("progressContainer");
+          const progressStatus = document.getElementById("progressStatus");
+
+          if (progressContainer && progressStatus) {
+            progressContainer.style.display = "block";
+            progressContainer.classList.remove("error");
+            progressContainer.classList.add("success");
+            progressStatus.textContent = "Data Cleared";
+
+            // Hide the message after 3 seconds
+            setTimeout(() => {
+              progressContainer.style.display = "none";
+            }, 3000);
+          }
+        });
       }
     });
-
-    console.log("CLEARING DATA: Clear process finished");
   }
 }
 
@@ -858,7 +744,7 @@ function performDirectUpload(sheetId, scriptId, sheetUrl) {
     rows.push(row);
   }
 
-  // Show loading state
+  // Show loading state with progress tracking
   const loadingDiv = document.createElement("div");
   loadingDiv.id = "loadingOverlay";
   loadingDiv.style.position = "fixed";
@@ -877,32 +763,54 @@ function performDirectUpload(sheetId, scriptId, sheetUrl) {
   loadingContent.style.padding = "20px";
   loadingContent.style.borderRadius = "5px";
   loadingContent.style.textAlign = "center";
+  loadingContent.style.minWidth = "300px";
 
   const loadingText = document.createElement("p");
-  loadingText.textContent = `Uploading ${leads.length} leads to Google Sheets...`;
+  loadingText.id = "loadingStatus";
+  loadingText.textContent = `Preparing to upload ${leads.length} leads to Google Sheets...`;
 
-  const spinner = document.createElement("div");
-  spinner.style.border = "4px solid #f3f3f3";
-  spinner.style.borderTop = "4px solid #3498db";
-  spinner.style.borderRadius = "50%";
-  spinner.style.width = "30px";
-  spinner.style.height = "30px";
-  spinner.style.animation = "spin 2s linear infinite";
-  spinner.style.margin = "10px auto";
+  const progressBar = document.createElement("div");
+  progressBar.style.width = "100%";
+  progressBar.style.height = "20px";
+  progressBar.style.backgroundColor = "#f0f0f0";
+  progressBar.style.borderRadius = "10px";
+  progressBar.style.overflow = "hidden";
+  progressBar.style.margin = "10px 0";
 
-  // Add keyframes for spinner animation
-  const style = document.createElement("style");
-  style.textContent =
-    "@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }";
-  document.head.appendChild(style);
+  const progressFill = document.createElement("div");
+  progressFill.id = "progressFill";
+  progressFill.style.width = "0%";
+  progressFill.style.height = "100%";
+  progressFill.style.backgroundColor = "#4285f4";
+  progressFill.style.transition = "width 0.3s ease";
 
-  loadingContent.appendChild(spinner);
+  const progressText = document.createElement("p");
+  progressText.id = "progressText";
+  progressText.textContent = "0%";
+
+  progressBar.appendChild(progressFill);
   loadingContent.appendChild(loadingText);
+  loadingContent.appendChild(progressBar);
+  loadingContent.appendChild(progressText);
   loadingDiv.appendChild(loadingContent);
   document.body.appendChild(loadingDiv);
 
   // Use the Google Apps Script web app URL to upload the data
   const scriptUrl = `https://script.google.com/macros/s/${scriptId}/exec`;
+
+  // Update progress
+  function updateProgress(percent, status) {
+    const progressFill = document.getElementById("progressFill");
+    const progressText = document.getElementById("progressText");
+    const loadingStatus = document.getElementById("loadingStatus");
+
+    if (progressFill) progressFill.style.width = `${percent}%`;
+    if (progressText) progressText.textContent = `${percent}%`;
+    if (loadingStatus) loadingStatus.textContent = status;
+  }
+
+  // Start the upload process
+  updateProgress(0, "Starting upload...");
 
   fetch(scriptUrl, {
     method: "POST",
@@ -911,30 +819,35 @@ function performDirectUpload(sheetId, scriptId, sheetUrl) {
     },
     body: JSON.stringify({
       sheetId: sheetId,
-      data: {
-        data: rows,
-      },
+      data: rows, // Send the rows directly, not nested in another object
     }),
   })
-    .then((response) => response.json())
+    .then((response) => {
+      updateProgress(50, "Processing response...");
+      return response.json();
+    })
     .then((data) => {
       // Remove loading overlay
       document.body.removeChild(loadingDiv);
 
       if (data.status === "success") {
+        updateProgress(100, "Upload completed successfully!");
         alert(
           `Successfully uploaded ${leads.length} leads to your Google Sheet!`
         );
         // Open the sheet in a new tab
         chrome.tabs.create({ url: sheetUrl });
       } else {
-        alert(`Error: ${data.message || "Unknown error occurred"}`);
+        throw new Error(data.message || "Unknown error occurred");
       }
     })
     .catch((error) => {
       // Remove loading overlay
-      document.body.removeChild(loadingDiv);
+      if (loadingDiv.parentNode) {
+        document.body.removeChild(loadingDiv);
+      }
 
+      console.error("Upload error:", error);
       alert(`Error uploading data: ${error.message}`);
 
       // Fallback to clipboard method
@@ -1049,19 +962,6 @@ function handleTransferConfirm() {
 
 // Function to refresh data
 function refreshData() {
-  // Reset the cleared data flag - if user wants to refresh, they want new data
-  dataWasCleared = false;
-
-  // Clear the localStorage flag too
-  try {
-    localStorage.removeItem("indiamartDataCleared");
-    console.log("REFRESH: Cleared localStorage cleared flag");
-  } catch (e) {
-    console.error("Error clearing localStorage flag:", e);
-  }
-
-  console.log("REFRESH: Reset dataWasCleared flag");
-
   // Show the refresh animation
   const refreshBtn = document.getElementById("refreshData");
   if (refreshBtn) {
@@ -1236,69 +1136,17 @@ function processLeadData(rawData) {
 
 // Function to load data from storage
 function loadDataFromStorage() {
-  // Don't load data during initialization if the UI is being set up for cleared state
-  if (window.isInitializing) {
-    console.log("LOAD DATA: Skipping during initialization");
-    return;
-  }
-
-  // Check if data was cleared by user
-  if (
-    dataWasCleared ||
-    localStorage.getItem("indiamartDataCleared") === "true"
-  ) {
-    console.log(
-      "LOAD DATA: Data was cleared by user, not loading from storage"
-    );
-
-    // Set memory flag to ensure consistency
-    dataWasCleared = true;
-
-    // Set localStorage flag for persistence
-    if (localStorage.getItem("indiamartDataCleared") !== "true") {
-      localStorage.setItem("indiamartDataCleared", "true");
-    }
-
-    // Update UI to show empty state
-    const totalLeadsSpan = document.getElementById("totalLeads");
-    if (totalLeadsSpan) totalLeadsSpan.textContent = "0";
-
-    const leadsTable = document.getElementById("leadsTable");
-    if (leadsTable) {
-      leadsTable.innerHTML = `<tr><td colspan="7" class="text-center">Data has been cleared. Click refresh to load new data.</td></tr>`;
-    }
-
-    // Disable buttons
-    const exportCSVBtn = document.getElementById("exportCSV");
-    const exportExcelBtn = document.getElementById("exportExcel");
-    const clearDataBtn = document.getElementById("clearData");
-    if (exportCSVBtn) exportCSVBtn.disabled = true;
-    if (exportExcelBtn) exportExcelBtn.disabled = true;
-    if (clearDataBtn) clearDataBtn.disabled = true;
-
-    // Clear data source and last updated
-    const dataSourceSpan = document.getElementById("dataSource");
-    if (dataSourceSpan) dataSourceSpan.textContent = "None";
-
-    const lastUpdatedSpan = document.getElementById("lastUpdated");
-    if (lastUpdatedSpan) lastUpdatedSpan.textContent = "Never";
-
-    return;
-  }
-
-  console.log("LOAD DATA: Attempting to load from storage");
   chrome.storage.local.get("indiamartLeads", function (result) {
     if (result.indiamartLeads) {
       try {
         // Process the data
-        console.log("LOAD DATA: Found data in storage");
         const processedData = processLeadData(result.indiamartLeads);
 
         // Set the global variable
         window.currentLeadsData = processedData;
 
         // Update the display
-        updateLeadsDisplay(processedData);
+        updateLeadsDisplay();
 
         // Enable export buttons
         const exportCSVBtn = document.getElementById("exportCSV");
@@ -1309,20 +1157,12 @@ function loadDataFromStorage() {
         if (exportExcelBtn) exportExcelBtn.disabled = false;
         if (clearDataBtn) clearDataBtn.disabled = false;
       } catch (error) {
-        console.error("Error processing lead data:", error.message);
         alert("Error processing lead data: " + error.message);
       }
     } else {
-      console.log("LOAD DATA: No data in storage");
       // No data in storage
-      const totalLeadsSpan = document.getElementById("totalLeads");
-      if (totalLeadsSpan) totalLeadsSpan.textContent = "No leads found";
-
-      const leadsTable = document.getElementById("leadsTable");
-      if (leadsTable) {
-        leadsTable.innerHTML =
-          '<tr><td colspan="5" class="no-leads-message">No leads available. Click refresh to fetch leads.</td></tr>';
-      }
+      document.getElementById("leadsCount").textContent = "No leads found";
+      document.getElementById("leadsTable").innerHTML = "";
 
       // Disable export buttons
       const exportCSVBtn = document.getElementById("exportCSV");
@@ -1514,9 +1354,6 @@ function checkSheetJSLibrary() {
 // Update the event listeners in the document ready function
 document.addEventListener("DOMContentLoaded", function () {
   try {
-    // Set a global flag to prevent data operations temporarily during initialization
-    window.isInitializing = true;
-
     // Initialize the progress container
     const progressContainer = document.getElementById("progressContainer");
     if (progressContainer) {
@@ -1529,23 +1366,6 @@ document.addEventListener("DOMContentLoaded", function () {
     const refreshBtn = document.getElementById("refreshData");
     if (refreshBtn) {
       refreshBtn.disabled = false;
-    }
-
-    // Make sure all HTML elements are properly initialized
-    const totalLeadsSpan = document.getElementById("totalLeads");
-    if (totalLeadsSpan) totalLeadsSpan.textContent = "0";
-
-    const dataSourceSpan = document.getElementById("dataSource");
-    if (dataSourceSpan) dataSourceSpan.textContent = "None";
-
-    const lastUpdatedSpan = document.getElementById("lastUpdated");
-    if (lastUpdatedSpan) lastUpdatedSpan.textContent = "Never";
-
-    // Clear the table by default
-    const leadsTable = document.getElementById("leadsTable");
-    if (leadsTable && !leadsTable.innerHTML.trim()) {
-      leadsTable.innerHTML =
-        '<tr><td colspan="5" class="no-leads-message">No data available. Click refresh to fetch leads.</td></tr>';
     }
 
     // Check Chrome APIs
@@ -1599,50 +1419,7 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     }
 
-    // First priority: check localStorage flag
-    const wasCleared = localStorage.getItem("indiamartDataCleared") === "true";
-
-    // CRITICAL: If data was cleared, update UI FIRST before any other data loads
-    if (wasCleared) {
-      console.log("INIT: Data was previously cleared, ensuring empty UI state");
-
-      // Set memory flag
-      dataWasCleared = true;
-
-      // Ensure UI shows empty state
-      if (totalLeadsSpan) totalLeadsSpan.textContent = "0";
-
-      if (leadsTable) {
-        leadsTable.innerHTML =
-          '<tr><td colspan="5" class="no-leads-message">Data cleared. Click refresh to fetch new leads.</td></tr>';
-      }
-
-      // Disable export buttons
-      const exportCSVBtn = document.getElementById("exportCSV");
-      const exportExcelBtn = document.getElementById("exportExcel");
-      const clearDataBtn = document.getElementById("clearData");
-      if (exportCSVBtn) exportCSVBtn.disabled = true;
-      if (exportExcelBtn) exportExcelBtn.disabled = true;
-      if (clearDataBtn) clearDataBtn.disabled = true;
-
-      // Ensure data source and last updated are cleared
-      if (dataSourceSpan) dataSourceSpan.textContent = "None";
-      if (lastUpdatedSpan) lastUpdatedSpan.textContent = "Never";
-
-      // Force clear storage to be absolutely sure
-      chrome.storage.local.remove(["indiamartLeads", "leadData"], function () {
-        console.log("INIT: Storage cleared due to localStorage flag");
-      });
-
-      // Nullify any data in memory
-      window.currentLeadsData = null;
-
-      // Skip loading from storage completely
-      window.isInitializing = false;
-      return;
-    }
-
-    // Load initial data only if not cleared
+    // Load initial data
     try {
       loadDataFromStorage();
     } catch (error) {
@@ -1650,6 +1427,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
       // Try to update the UI to show the error
       try {
+        const totalLeadsSpan = document.getElementById("totalLeads");
+        const leadsTable = document.getElementById("leadsTable");
+
         if (totalLeadsSpan) totalLeadsSpan.textContent = "Error";
         if (leadsTable) {
           leadsTable.innerHTML =
@@ -1709,11 +1489,10 @@ document.addEventListener("DOMContentLoaded", function () {
     addClickListener("exportExcel", exportAsExcel);
     addClickListener("clearData", clearStoredData);
     addClickListener("refreshData", refreshData);
-
-    // End initialization
-    window.isInitializing = false;
+    addClickListener("directUpload", directUploadToSheets);
+    addClickListener("transferSheets", showTransferToSheets);
+    addClickListener("confirmTransfer", handleTransferConfirm);
   } catch (error) {
-    window.isInitializing = false;
     alert("Error initializing extension popup: " + error.message);
   }
 });
@@ -1934,16 +1713,6 @@ function updateStats(data) {
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   // Handle lead data
   if (message.type === "LEAD_DATA") {
-    // Check immediately if data was cleared
-    if (
-      dataWasCleared ||
-      localStorage.getItem("indiamartDataCleared") === "true"
-    ) {
-      console.log("LEAD_DATA handler: Data was cleared, ignoring");
-      sendResponse({ status: "ignored", message: "Data was cleared by user" });
-      return true;
-    }
-
     try {
       // Process the data
       const processedData = processLeadData(message.data);
@@ -2028,54 +1797,6 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
   else if (message.type === "NEW_LEADS") {
     try {
       console.log("Popup: Received new leads data from background script");
-
-      // DOUBLE CHECK for cleared state, checking both memory and localStorage
-      // This is critical to prevent the list from reappearing
-      const wasCleared =
-        dataWasCleared ||
-        localStorage.getItem("indiamartDataCleared") === "true";
-
-      if (wasCleared) {
-        console.log("NEW_LEADS handler: Data was cleared, blocking new data");
-
-        // Reapply cleared UI state to be absolutely sure
-        window.currentLeadsData = null;
-
-        const leadsTable = document.getElementById("leadsTable");
-        if (leadsTable) {
-          leadsTable.innerHTML =
-            '<tr><td colspan="5" class="no-leads-message">Data cleared. Click refresh to fetch new leads.</td></tr>';
-        }
-
-        const totalLeadsSpan = document.getElementById("totalLeads");
-        if (totalLeadsSpan) totalLeadsSpan.textContent = "0";
-
-        // Disable export buttons
-        const exportCSVBtn = document.getElementById("exportCSV");
-        const exportExcelBtn = document.getElementById("exportExcel");
-        const clearDataBtn = document.getElementById("clearData");
-        if (exportCSVBtn) exportCSVBtn.disabled = true;
-        if (exportExcelBtn) exportExcelBtn.disabled = true;
-        if (clearDataBtn) clearDataBtn.disabled = true;
-
-        // Clear data source and last updated
-        const dataSourceSpan = document.getElementById("dataSource");
-        if (dataSourceSpan) dataSourceSpan.textContent = "None";
-
-        const lastUpdatedSpan = document.getElementById("lastUpdated");
-        if (lastUpdatedSpan) lastUpdatedSpan.textContent = "Never";
-
-        // Double check storage is clear
-        chrome.storage.local.remove(["indiamartLeads", "leadData"]);
-
-        if (sendResponse) {
-          sendResponse({
-            status: "ignored",
-            message: "Data was cleared by user",
-          });
-        }
-        return true;
-      }
 
       // Process the data
       const processedData = message.data;
@@ -2249,81 +1970,6 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       sendResponse({
         status: "error",
         message: "Error stopping refresh animation: " + error.message,
-      });
-    }
-
-    return true; // Keep the message channel open for async response
-  }
-
-  // Handle API cancellation notification
-  else if (message.type === "API_CANCELLED_NOTIFICATION") {
-    console.log(
-      "API_CANCELLED_NOTIFICATION: Cancellation notification received"
-    );
-    try {
-      // Mark data as cleared to prevent immediate reloading
-      dataWasCleared = true;
-
-      // Set localStorage flag to persist the cleared state
-      localStorage.setItem("indiamartDataCleared", "true");
-
-      // Clear current data
-      window.currentLeadsData = null;
-
-      // Ensure the table is cleared
-      const leadsTable = document.getElementById("leadsTable");
-      if (leadsTable) {
-        leadsTable.innerHTML =
-          '<tr><td colspan="5" class="no-leads-message">Data cleared. API calls cancelled.</td></tr>';
-      }
-
-      // Update all UI elements to show empty state
-      const totalLeadsSpan = document.getElementById("totalLeads");
-      if (totalLeadsSpan) totalLeadsSpan.textContent = "0";
-
-      const dataSourceSpan = document.getElementById("dataSource");
-      if (dataSourceSpan) dataSourceSpan.textContent = "None";
-
-      const lastUpdatedSpan = document.getElementById("lastUpdated");
-      if (lastUpdatedSpan) lastUpdatedSpan.textContent = "Never";
-
-      // Disable export buttons
-      const exportCSVBtn = document.getElementById("exportCSV");
-      const exportExcelBtn = document.getElementById("exportExcel");
-      const clearDataBtn = document.getElementById("clearData");
-      if (exportCSVBtn) exportCSVBtn.disabled = true;
-      if (exportExcelBtn) exportExcelBtn.disabled = true;
-      if (clearDataBtn) clearDataBtn.disabled = true;
-
-      // Hide progress UI if visible
-      const progressContainer = document.getElementById("progressContainer");
-      if (progressContainer) {
-        progressContainer.style.display = "none";
-      }
-
-      // Stop refresh animation if it's running
-      const refreshBtn = document.getElementById("refreshData");
-      if (refreshBtn) {
-        refreshBtn.classList.remove("spinning");
-        refreshBtn.disabled = false;
-        refreshBtn.title = "Refresh Data";
-      }
-
-      // Double check that storage is also cleared
-      chrome.storage.local.remove(["indiamartLeads", "leadData"], function () {
-        console.log("API_CANCELLED: Storage cleared successfully");
-      });
-
-      // Send response
-      sendResponse({
-        status: "success",
-        message: "API cancellation processed",
-      });
-    } catch (error) {
-      console.error("Popup: Error handling API cancellation:", error);
-      sendResponse({
-        status: "error",
-        message: "Error handling API cancellation: " + error.message,
       });
     }
 

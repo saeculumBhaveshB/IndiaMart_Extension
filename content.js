@@ -90,6 +90,13 @@ function interceptFetch() {
 
     // Check if this is the target API
     if (url.includes("getContactList")) {
+      // Check if fetching has been cancelled
+      if (fetchCancelled || !isFetchingInProgress) {
+        console.log("IndiaMart Extension: API call blocked - fetch cancelled");
+        // Return a rejected promise to prevent the API call
+        return Promise.reject(new Error("Fetch cancelled by user"));
+      }
+
       console.log("IndiaMart Extension: Detected getContactList API call", url);
 
       // Log request details
@@ -112,17 +119,10 @@ function interceptFetch() {
       responseClone
         .json()
         .then((data) => {
-          // console.log(
-          //   "IndiaMart Extension: Successfully captured Lead Manager data"
-          // );
-          // console.log(
-          //   "IndiaMart Extension: Response structure:",
-          //   Object.keys(data)
-          // );
-          // console.log(
-          //   "IndiaMart Extension: Raw data sample:",
-          //   JSON.stringify(data).substring(0, 500) + "..."
-          // );
+          // Check if fetching has been cancelled before processing
+          if (fetchCancelled || !isFetchingInProgress) {
+            throw new Error("Fetch cancelled by user");
+          }
 
           // Ensure the data has the correct structure
           const processedData = ensureCorrectDataStructure(data);
@@ -270,10 +270,16 @@ function interceptFetch() {
           }
         })
         .catch((err) => {
-          console.error(
-            "IndiaMart Extension: Error processing API response",
-            err
-          );
+          if (err.message === "Fetch cancelled by user") {
+            console.log(
+              "IndiaMart Extension: Processing cancelled - fetch was cancelled by user"
+            );
+          } else {
+            console.error(
+              "IndiaMart Extension: Error processing API response",
+              err
+            );
+          }
         });
 
       // Return the original response
@@ -299,6 +305,16 @@ function interceptXHR() {
   XMLHttpRequest.prototype.send = function () {
     // Check if this is the target API
     if (this._url && this._url.includes("getContactList")) {
+      // Check if fetching has been cancelled
+      if (fetchCancelled || !isFetchingInProgress) {
+        console.log(
+          "IndiaMart Extension: XHR API call blocked - fetch cancelled"
+        );
+        // Abort the request
+        this.abort();
+        return;
+      }
+
       console.log(
         "IndiaMart Extension: Detected getContactList API call via XHR",
         this._url
@@ -308,15 +324,8 @@ function interceptXHR() {
       if (arguments[0] && typeof arguments[0] === "string") {
         try {
           const requestData = JSON.parse(arguments[0]);
-          console.log(
-            "IndiaMart Extension: XHR Request parameters:",
-            requestData
-          );
         } catch (e) {
-          console.log(
-            "IndiaMart Extension: Could not parse XHR request body",
-            e
-          );
+          // Ignore parse errors
         }
       }
 
@@ -326,6 +335,14 @@ function interceptXHR() {
       // Override onreadystatechange
       this.onreadystatechange = function () {
         if (this.readyState === 4 && this.status === 200) {
+          // Check if fetching has been cancelled before processing
+          if (fetchCancelled || !isFetchingInProgress) {
+            console.log(
+              "IndiaMart Extension: XHR processing cancelled - fetch was cancelled by user"
+            );
+            return;
+          }
+
           try {
             const data = JSON.parse(this.responseText);
             // console.log("IndiaMart Extension: XHR Response received:", {
@@ -418,8 +435,8 @@ function interceptXHR() {
                     // ========== IndiaMart Data Sent to Background (Summarized) ==========
                     // Response: ${JSON.stringify(response)}
                     // Time: ${new Date().toISOString()}
-                    // =====================================================
-                    //                   `);
+                    // ====================================================
+                    //                 `);
 
                     // Store the full data in localStorage for direct access
                     try {
@@ -503,42 +520,16 @@ function interceptXHR() {
               reject(error);
             }
           } catch (err) {
-            console.error(
-              "IndiaMart Extension: Error processing XHR response",
-              err
-            );
-            updateProgress({
-              status: "error",
-              error: err.message || "Error in fallback extraction",
-              source: "error",
-              endTime: new Date().toISOString(),
-            });
-
-            const errorResult = {
-              data: [],
-              timestamp: new Date().toISOString(),
-              source: "error",
-              error: err.message,
-              isRefresh: isRefresh,
-            };
-
-            // Send the error result to the background script
-            chrome.runtime.sendMessage(
-              {
-                type: "LEAD_DATA",
-                data: errorResult,
-                isRefresh: isRefresh,
-              },
-              function (response) {
-                if (chrome.runtime.lastError) {
-                  console.error(
-                    "Error sending error data to background:",
-                    chrome.runtime.lastError
-                  );
-                }
-                resolve(errorResult);
-              }
-            );
+            if (err.message === "Fetch cancelled by user") {
+              console.log(
+                "IndiaMart Extension: XHR processing cancelled - fetch was cancelled by user"
+              );
+            } else {
+              console.error(
+                "IndiaMart Extension: Error processing XHR response",
+                err
+              );
+            }
           }
         }
 
@@ -561,11 +552,6 @@ function fetchLeadData() {
   // Source: Manual fetch
   // ==================================================
   //   `);
-
-  // Reset the cancel flag when starting a new fetch
-  window.cancelApiCalls = false;
-  window.highPriorityCancellation = false;
-  window.activeApiController = null; // Clear any existing controller
 
   // Track progress for the popup
   let progressData = {
@@ -1069,11 +1055,20 @@ function fetchLeadCount() {
   });
 }
 
+// Add these global variables at the top of the file
+let fetchCancelled = false;
+let currentFetchAbortController = null;
+let isFetchingInProgress = false; // New flag to track overall fetch state
+
 // Function to fetch all leads in batches
 function fetchAllLeads(totalCount, updateProgress) {
+  // Reset flags at the start of a new fetch
+  fetchCancelled = false;
+  isFetchingInProgress = true;
+
   const batchSize = 100; // Number of leads to fetch per request
   const allLeads = [];
-  let lastContactDate = ""; // Initialize with an empty string for the first batch
+  let lastContactDate = "";
   let currentStart = 1;
   let currentEnd = batchSize;
   let totalFetched = 0;
@@ -1113,18 +1108,21 @@ function fetchAllLeads(totalCount, updateProgress) {
   return new Promise((resolve, reject) => {
     let completedBatches = 0;
     let consecutiveEmptyBatches = 0;
-    const maxConsecutiveEmptyBatches = 3; // Stop after this many consecutive empty batches
+    const maxConsecutiveEmptyBatches = 3;
 
     // Function to process each batch
     function processBatch(batchNum) {
-      // Check if API calls should be cancelled
-      if (window.cancelApiCalls) {
-        console.log("API calls cancelled. Stopping batch processing.");
-        window.cancelApiCalls = false; // Reset flag for future calls
-        window.highPriorityCancellation = false; // Reset high priority flag
-        window.activeApiController = null; // Clear the active controller
-        apiCallInProgress = false;
-        resolve(allLeads); // Resolve with whatever data we've collected so far
+      // Check if fetching has been cancelled
+      if (fetchCancelled || !isFetchingInProgress) {
+        console.log("Lead fetching was cancelled by user");
+        isFetchingInProgress = false;
+        // Abort any ongoing request
+        if (currentFetchAbortController) {
+          currentFetchAbortController.abort();
+        }
+        // Clear the allLeads array when cancelled
+        allLeads.length = 0;
+        resolve(allLeads);
         return;
       }
 
@@ -1139,28 +1137,8 @@ function fetchAllLeads(totalCount, updateProgress) {
       // Set the flag to indicate an API call is in progress
       apiCallInProgress = true;
 
-      console.log(`
-========== IndiaMart Batch ${batchNum} Started ==========
-Start: ${currentStart}
-End: ${currentEnd}
-Last Contact Date: ${lastContactDate}
-Total Fetched So Far: ${totalFetched}/${totalCount}
-Remaining: ${totalCount - totalFetched}
-Time: ${new Date().toISOString()}
-====================================================
-      `);
-
-      // Create request data for the batch
-      let requestData = {
-        type: 0,
-        start: currentStart,
-        end: currentEnd,
-        last_contact_date: lastContactDate,
-      };
-
-      // Create a new AbortController for this request
-      window.activeApiController = new AbortController();
-      const signal = window.activeApiController.signal;
+      // Create an AbortController for this fetch request
+      currentFetchAbortController = new AbortController();
 
       // Make the API request
       fetch("https://seller.indiamart.com/lmsreact/getContactList", {
@@ -1169,18 +1147,19 @@ Time: ${new Date().toISOString()}
           "Content-Type": "application/json",
           Accept: "*/*",
         },
-        body: JSON.stringify(requestData),
+        body: JSON.stringify({
+          type: 0,
+          start: currentStart,
+          end: currentEnd,
+          last_contact_date: lastContactDate,
+        }),
         credentials: "include",
-        signal: signal, // Add the abort signal to the fetch request
+        signal: currentFetchAbortController.signal,
       })
         .then((response) => {
-          // Check if API calls should be cancelled
-          if (window.cancelApiCalls) {
-            window.cancelApiCalls = false; // Reset flag for future calls
-            window.highPriorityCancellation = false; // Reset high priority flag
-            window.activeApiController = null; // Clear the active controller
-            apiCallInProgress = false;
-            throw new Error("API call cancelled by user");
+          // Check cancellation before processing response
+          if (fetchCancelled || !isFetchingInProgress) {
+            throw new Error("Fetch cancelled by user");
           }
 
           if (!response.ok) {
@@ -1191,22 +1170,16 @@ Time: ${new Date().toISOString()}
           return response.json();
         })
         .then((data) => {
-          // Check if API calls should be cancelled
-          if (window.cancelApiCalls) {
-            window.cancelApiCalls = false; // Reset flag for future calls
-            window.highPriorityCancellation = false; // Reset high priority flag
-            window.activeApiController = null; // Clear the active controller
-            apiCallInProgress = false;
-            throw new Error("API call cancelled by user");
+          // Check cancellation before processing data
+          if (fetchCancelled || !isFetchingInProgress) {
+            throw new Error("Fetch cancelled by user");
           }
 
           // Mark that the API call is complete
           apiCallInProgress = false;
-          window.activeApiController = null; // Clear the active controller
 
           // Extract the leads from the response
           let leads = [];
-
           if (data && data.result && Array.isArray(data.result)) {
             leads = data.result;
           } else if (data && data.data && Array.isArray(data.data)) {
@@ -1217,12 +1190,8 @@ Time: ${new Date().toISOString()}
           if (leads.length > 0) {
             const lastLead = leads[leads.length - 1];
             lastContactDate = getLastContactDate(lastLead);
-
-            // Add the leads to our collection
             allLeads.push(...leads);
             totalFetched += leads.length;
-
-            // Reset consecutive empty batches counter
             consecutiveEmptyBatches = 0;
           } else {
             consecutiveEmptyBatches++;
@@ -1241,43 +1210,53 @@ Time: ${new Date().toISOString()}
 
           // Determine if we should continue fetching
           const shouldContinue =
+            !fetchCancelled &&
+            isFetchingInProgress &&
             totalFetched < totalCount &&
             consecutiveEmptyBatches < maxConsecutiveEmptyBatches;
 
-          // Add a 2-second delay before processing the next batch
           if (shouldContinue) {
-            console.log(
-              `Adding a 2-second delay before processing the next batch`
-            );
-
+            // Add a delay before the next batch
             setTimeout(() => {
-              // Check if API calls should be cancelled
-              if (window.cancelApiCalls) {
-                console.log(
-                  "API calls cancelled during error delay between batches."
-                );
-                window.cancelApiCalls = false; // Reset flag for future calls
-                window.highPriorityCancellation = false; // Reset high priority flag
-                window.activeApiController = null; // Clear the active controller
-                resolve(allLeads); // Resolve with what we have
+              // Check cancellation before scheduling next batch
+              if (fetchCancelled || !isFetchingInProgress) {
+                console.log("Lead fetching was cancelled during the delay");
+                isFetchingInProgress = false;
+                // Abort any ongoing request
+                if (currentFetchAbortController) {
+                  currentFetchAbortController.abort();
+                }
+                // Clear the allLeads array when cancelled during delay
+                allLeads.length = 0;
+                resolve(allLeads);
                 return;
               }
 
-              // Update start and end for the next batch
               currentStart = currentEnd + 1;
               currentEnd = currentStart + batchSize - 1;
-
-              // Process the next batch
               processBatch(batchNum + 1);
-            }, 2000); // 2-second delay
+            }, 2000);
           } else {
-            // We're done fetching
+            isFetchingInProgress = false;
             resolve(allLeads);
           }
         })
         .catch((error) => {
           // Mark that the API call is complete even if there was an error
           apiCallInProgress = false;
+
+          // If the error is due to cancellation, handle it gracefully
+          if (
+            error.name === "AbortError" ||
+            error.message === "Fetch cancelled by user"
+          ) {
+            console.log("Fetch was cancelled by user");
+            isFetchingInProgress = false;
+            // Clear the allLeads array when cancelled due to error
+            allLeads.length = 0;
+            resolve(allLeads);
+            return;
+          }
 
           console.error(`Batch ${batchNum} failed: ${error.message}`);
 
@@ -1294,34 +1273,34 @@ Time: ${new Date().toISOString()}
 
           // Determine if we should continue despite the error
           if (
+            !fetchCancelled &&
+            isFetchingInProgress &&
             completedBatches < Math.ceil(totalCount / batchSize) &&
             totalFetched < totalCount
           ) {
-            console.log(
-              `Adding a 2-second delay before trying the next batch after an error`
-            );
-
             setTimeout(() => {
-              // Check if API calls should be cancelled
-              if (window.cancelApiCalls) {
+              // Check cancellation before scheduling next batch
+              if (fetchCancelled || !isFetchingInProgress) {
                 console.log(
-                  "API calls cancelled during error delay between batches."
+                  "Lead fetching was cancelled during the error delay"
                 );
-                window.cancelApiCalls = false; // Reset flag for future calls
-                window.highPriorityCancellation = false; // Reset high priority flag
-                window.activeApiController = null; // Clear the active controller
-                resolve(allLeads); // Resolve with what we have
+                isFetchingInProgress = false;
+                // Abort any ongoing request
+                if (currentFetchAbortController) {
+                  currentFetchAbortController.abort();
+                }
+                // Clear the allLeads array when cancelled during error delay
+                allLeads.length = 0;
+                resolve(allLeads);
                 return;
               }
 
-              // Update start and end for the next batch
               currentStart = currentEnd + 1;
               currentEnd = currentStart + batchSize - 1;
-
-              // Process the next batch
               processBatch(batchNum + 1);
-            }, 2000); // 2-second delay
+            }, 2000);
           } else {
+            isFetchingInProgress = false;
             resolve(allLeads);
           }
         });
@@ -1330,6 +1309,119 @@ Time: ${new Date().toISOString()}
     // Start processing the first batch
     processBatch(1);
   });
+}
+
+// Update the cancelLeadFetch function to handle both flags
+function cancelLeadFetch() {
+  console.log("IndiaMart Extension: Starting cancellation process");
+
+  // Set both flags to stop any ongoing or future fetches
+  fetchCancelled = true;
+  isFetchingInProgress = false;
+
+  // Abort any in-progress fetch request
+  if (currentFetchAbortController) {
+    try {
+      currentFetchAbortController.abort();
+      console.log("IndiaMart Extension: Aborted in-progress fetch request");
+    } catch (error) {
+      console.error("IndiaMart Extension: Error aborting fetch:", error);
+    }
+  }
+
+  // Stop the refresh button animation
+  stopRefreshAnimation();
+
+  // Clear any stored data
+  try {
+    localStorage.removeItem("indiamartFullLeads");
+    console.log("IndiaMart Extension: Cleared stored lead data");
+  } catch (error) {
+    console.error("IndiaMart Extension: Error clearing stored data:", error);
+  }
+
+  // Clear any refresh intervals
+  if (window.leadManagerRefreshInterval) {
+    clearInterval(window.leadManagerRefreshInterval);
+    window.leadManagerRefreshInterval = null;
+    console.log("IndiaMart Extension: Cleared refresh interval");
+  }
+
+  // Clear all data structures that might be holding leads
+  try {
+    // Clear the leads list from the DOM
+    const leadListContainers = document.querySelectorAll(
+      '.lead-list, .leads-container, [class*="lead-list"], [class*="leads-container"], table tbody'
+    );
+
+    if (leadListContainers.length > 0) {
+      leadListContainers.forEach((container) => {
+        container.innerHTML = "";
+        console.log("IndiaMart Extension: Cleared leads list from DOM");
+      });
+    }
+
+    // Clear any data in the window object
+    if (window.leadData) delete window.leadData;
+    if (window.LEAD_DATA) delete window.LEAD_DATA;
+    if (window.leads) delete window.leads;
+    console.log("IndiaMart Extension: Cleared leads data from window object");
+
+    // Clear any arrays or objects that might be holding leads
+    if (window.allLeads) window.allLeads = [];
+    if (window.processedLeads) window.processedLeads = [];
+    if (window.leadArray) window.leadArray = [];
+    if (window.leadsArray) window.leadsArray = [];
+    console.log("IndiaMart Extension: Cleared leads arrays");
+
+    // Clear any data in the global scope
+    if (typeof allLeads !== "undefined") allLeads = [];
+    if (typeof processedLeads !== "undefined") processedLeads = [];
+    if (typeof leadArray !== "undefined") leadArray = [];
+    if (typeof leadsArray !== "undefined") leadsArray = [];
+    console.log("IndiaMart Extension: Cleared global leads arrays");
+
+    // Clear any data in the React state if it exists
+    if (window.__REACT_DEVTOOLS_GLOBAL_HOOK__) {
+      const reactInstances =
+        window.__REACT_DEVTOOLS_GLOBAL_HOOK__.getFiberRoots();
+      reactInstances.forEach((instance) => {
+        if (instance && instance.current && instance.current.stateNode) {
+          const stateNode = instance.current.stateNode;
+          if (stateNode.state && stateNode.state.leads) {
+            stateNode.state.leads = [];
+          }
+        }
+      });
+    }
+    console.log("IndiaMart Extension: Cleared React state leads data");
+  } catch (error) {
+    console.error(
+      "IndiaMart Extension: Error clearing data structures:",
+      error
+    );
+  }
+
+  // Send message to background script to clear data
+  chrome.runtime.sendMessage(
+    {
+      type: "CLEAR_LEADS_DATA",
+    },
+    function (response) {
+      if (chrome.runtime.lastError) {
+        console.error(
+          "IndiaMart Extension: Error clearing data in background:",
+          chrome.runtime.lastError
+        );
+      } else {
+        console.log(
+          "IndiaMart Extension: Successfully cleared data in background"
+        );
+      }
+    }
+  );
+
+  return fetchCancelled;
 }
 
 // Create a specific request observer for the Lead Manager page
@@ -1469,6 +1561,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Try to fetch the lead data
     fetchLeadData();
     sendResponse({ status: "fetching" });
+  } else if (message.action === "CANCEL_FETCH") {
+    console.log("IndiaMart Extension: Received cancel fetch request");
+    // Cancel any ongoing fetch
+    const cancelled = cancelLeadFetch();
+    // Clear any stored data
+    try {
+      localStorage.removeItem("indiamartFullLeads");
+      console.log("IndiaMart Extension: Cleared stored lead data");
+    } catch (error) {
+      console.error("IndiaMart Extension: Error clearing stored data:", error);
+    }
+    // Stop any refresh intervals
+    if (window.leadManagerRefreshInterval) {
+      clearInterval(window.leadManagerRefreshInterval);
+      window.leadManagerRefreshInterval = null;
+    }
+    // Send response back
+    sendResponse({ status: "cancelled", success: cancelled });
   }
 });
 
@@ -1493,71 +1603,38 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     });
 
     // Extract lead data from the page - this is now asynchronous
-    extractLeadData(message.isRefresh || message.forceFetch || false);
-    // We're not returning anything here as the response has already been sent
-  } else if (message.action === "CANCEL_API_CALLS") {
-    // Flag to cancel ongoing API calls
-    window.cancelApiCalls = true;
-
-    // Set high priority flag if specified
-    if (message.priority === "high") {
-      window.highPriorityCancellation = true;
-
-      // Force stop any API calls by aborting fetch requests if possible
-      if (window.activeApiController && window.activeApiController.abort) {
+    extractLeadData(message.isRefresh || message.forceFetch || false)
+      .then((result) => {
+        // console.log(
+        //   "Content script: Lead data extraction completed successfully",
+        //   {
+        //     totalLeads: result.data.length,
+        //     source: result.source,
+        //   }
+        // );
+        // The data is already sent to the background script in the extractLeadData function
+      })
+      .catch((error) => {
+        console.error("Content script: Error extracting lead data:", error);
+        // Try to notify the popup about the error
         try {
-          window.activeApiController.abort();
-          console.log("IndiaMart Extension: Actively aborted API calls");
-        } catch (e) {
-          console.error("Error aborting API calls:", e);
+          chrome.runtime.sendMessage({
+            type: "FETCH_ERROR",
+            error: error.message || "Unknown error during lead extraction",
+            timestamp: new Date().toISOString(),
+          });
+        } catch (sendError) {
+          console.error("Failed to send error message to popup:", sendError);
         }
-      }
-
-      // Immediately send a message to the background script to notify of cancellation
-      chrome.runtime.sendMessage(
-        {
-          type: "API_CANCELLED",
-          timestamp: new Date().toISOString(),
-          success: true,
-          message: "API calls forcefully cancelled",
-        },
-        function () {
-          // Clear any data in local storage as well
-          try {
-            localStorage.removeItem("indiamartFullLeads");
-            localStorage.removeItem("indiamartLeads");
-          } catch (storageError) {
-            console.error("Error clearing localStorage:", storageError);
-          }
-        }
-      );
-    }
-
-    console.log(
-      "IndiaMart Extension: Cancelling all API calls with priority:",
-      message.priority || "normal"
-    );
-
-    // Send response back to popup immediately
-    if (sendResponse) {
-      sendResponse({
-        status: "cancelled", // Changed from "cancelling" to indicate completion
-        message: "API calls cancelled successfully",
-        timestamp: new Date().toISOString(),
-        success: true,
       });
-    }
+
+    return true; // Keep the message channel open for async response
   }
 });
 
 // Function to extract lead data from the page
 function extractLeadData(isRefresh) {
   // console.log("Content script: Extracting lead data, isRefresh:", isRefresh);
-
-  // Reset the cancel flag when starting a new extraction
-  window.cancelApiCalls = false;
-  window.highPriorityCancellation = false;
-  window.activeApiController = null; // Clear any existing controller
 
   // Track progress for the popup
   let progressData = {
@@ -1982,7 +2059,55 @@ window.addEventListener("beforeunload", function () {
   createLeadManagerObserver();
 })();
 
-// Global flag to track if API calls should be cancelled
-window.cancelApiCalls = false;
-window.highPriorityCancellation = false;
-window.activeApiController = null; // Store active AbortController
+// Function to update the leads list in the DOM
+function updateLeadsList(leads) {
+  // Look for the leads list container
+  const leadListContainers = document.querySelectorAll(
+    '.lead-list, .leads-container, [class*="lead-list"], [class*="leads-container"], table tbody'
+  );
+
+  if (leadListContainers.length > 0) {
+    leadListContainers.forEach((container) => {
+      // Clear the container's content
+      container.innerHTML = "";
+
+      if (leads.length === 0) {
+        // Create a message container with styling
+        const messageContainer = document.createElement("div");
+        messageContainer.style.cssText = `
+          text-align: center;
+          padding: 20px;
+          color: #666;
+          font-size: 14px;
+          background: #f9f9f9;
+          border-radius: 4px;
+          margin: 10px 0;
+        `;
+
+        // Create the message text
+        const messageText = document.createElement("p");
+        messageText.textContent =
+          "No leads found. Click the refresh button to fetch the latest leads.";
+        messageContainer.appendChild(messageText);
+
+        // Add a hint about the refresh button
+        const hintText = document.createElement("p");
+        hintText.style.cssText = `
+          margin-top: 8px;
+          font-size: 12px;
+          color: #999;
+        `;
+        hintText.textContent =
+          "Tip: The refresh button is located in the top-right corner.";
+        messageContainer.appendChild(hintText);
+
+        container.appendChild(messageContainer);
+      } else {
+        // Process and display leads as before
+        leads.forEach((lead) => {
+          // ... existing lead processing code ...
+        });
+      }
+    });
+  }
+}

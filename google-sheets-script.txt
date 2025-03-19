@@ -3,6 +3,7 @@
 // Then deploy it as a web app to get a URL that can be used by the extension
 
 function doGet(e) {
+  console.log('Received GET request - this endpoint only accepts POST requests');
   return ContentService.createTextOutput(JSON.stringify({
     status: 'error',
     message: 'This endpoint only accepts POST requests'
@@ -10,65 +11,37 @@ function doGet(e) {
 }
 
 function doPost(e) {
+  console.log('Received POST request');
   try {
-    // Get the sheet ID from the request parameters or payload
-    let sheetId;
-    let parsedData;
+    // Get the sheet ID and data from the request
+    const requestData = JSON.parse(e.postData.contents);
+    const sheetId = requestData.sheetId;
+    const rows = requestData.data; // Data is now directly an array of rows
     
-    // Check if the data is coming from URL parameters or POST body
-    if (e.parameter && e.parameter.sheetId) {
-      // Data from URL parameters (form submission)
-      sheetId = e.parameter.sheetId;
-      
-      // Get the data from the request
-      const data = e.postData.contents;
-      if (!data) {
-        return ContentService.createTextOutput(JSON.stringify({
-          status: 'error',
-          message: 'No data provided'
-        })).setMimeType(ContentService.MimeType.JSON);
-      }
-      
-      // Parse the data
-      try {
-        parsedData = JSON.parse(data);
-      } catch (error) {
-        return ContentService.createTextOutput(JSON.stringify({
-          status: 'error',
-          message: 'Invalid JSON data: ' + error.message
-        })).setMimeType(ContentService.MimeType.JSON);
-      }
-    } else if (e.postData && e.postData.contents) {
-      // Data from POST body (direct API call)
-      const requestData = JSON.parse(e.postData.contents);
-      sheetId = requestData.sheetId;
-      parsedData = requestData.data;
-      
-      if (!sheetId) {
-        return ContentService.createTextOutput(JSON.stringify({
-          status: 'error',
-          message: 'No sheet ID provided in request body'
-        })).setMimeType(ContentService.MimeType.JSON);
-      }
-      
-      if (!parsedData) {
-        return ContentService.createTextOutput(JSON.stringify({
-          status: 'error',
-          message: 'No data provided in request body'
-        })).setMimeType(ContentService.MimeType.JSON);
-      }
-    } else {
+    if (!sheetId) {
+      console.log('Error: No sheet ID provided');
       return ContentService.createTextOutput(JSON.stringify({
         status: 'error',
-        message: 'No data or sheet ID provided'
+        message: 'No sheet ID provided'
       })).setMimeType(ContentService.MimeType.JSON);
     }
     
+    if (!Array.isArray(rows)) {
+      console.log('Error: Data must be an array');
+      return ContentService.createTextOutput(JSON.stringify({
+        status: 'error',
+        message: 'Invalid data format: expected an array'
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    console.log('Opening spreadsheet with ID:', sheetId);
     // Open the spreadsheet
     let spreadsheet;
     try {
       spreadsheet = SpreadsheetApp.openById(sheetId);
+      console.log('Successfully opened spreadsheet');
     } catch (error) {
+      console.log('Error opening spreadsheet:', error.message);
       return ContentService.createTextOutput(JSON.stringify({
         status: 'error',
         message: 'Could not open spreadsheet: ' + error.message
@@ -77,102 +50,41 @@ function doPost(e) {
     
     // Get the first sheet
     let sheet = spreadsheet.getSheets()[0];
+    console.log('Got first sheet');
     
     // Clear the sheet
     sheet.clear();
+    console.log('Cleared existing data');
     
-    // Check if we have data rows directly or need to extract them
-    let rows = [];
-    
-    if (Array.isArray(parsedData.data)) {
-      // Data is already in the expected format
-      rows = parsedData.data;
-    } else if (parsedData.data && Array.isArray(parsedData.data.data)) {
-      // Data is nested one level deeper
-      const leads = parsedData.data.data;
-      
-      // Define the specific fields to include
-      const specificFields = [
-        "contact_last_product",
-        "contacts_name",
-        "contacts_mobile1",
-        "contact_city",
-        "last_contact_date",
-        "last_product_qty",
-        "contacts_company"
-      ];
-      
-      // Add the headers to the sheet with friendly names
-      const friendlyHeaders = [
-        "PRODUCT",
-        "CUSTOMER",
-        "CONTACT",
-        "CITY",
-        "LEAD DATE",
-        "REQUIREMENTS",
-        "FIRM"
-      ];
-      
-      // Add headers as first row
-      rows.push(friendlyHeaders);
-      
-      // Prepare the data rows with only the specific fields
-      for (let i = 0; i < leads.length; i++) {
-        const lead = leads[i];
-        const row = [];
-        
-        for (let j = 0; j < specificFields.length; j++) {
-          const field = specificFields[j];
-          // Check for the field using various possible naming conventions
-          const value = lead[field] || 
-                       lead[field.replace('contacts_', 'contact_')] || 
-                       lead[field.replace('contact_', 'contacts_')] || 
-                       lead[field.replace('_', '')] || 
-                       lead[field.replace('_', '-')] || 
-                       '';
-          row.push(value);
-        }
-        
-        rows.push(row);
-      }
-    } else {
-      return ContentService.createTextOutput(JSON.stringify({
-        status: 'error',
-        message: 'Invalid data format'
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-    
-    // Set the data in the sheet
     if (rows.length > 0) {
-      // Set the headers in the sheet
+      console.log('Setting data in sheet, total rows:', rows.length);
+      
+      // Set all the data at once
+      sheet.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+      console.log('Set all data');
+      
+      // Format the headers (first row)
       const headerRange = sheet.getRange(1, 1, 1, rows[0].length);
-      headerRange.setValues([rows[0]]);
-      
-      // Format the headers with bold and larger font
       headerRange.setFontWeight('bold');
-      headerRange.setFontSize(12); // Increase font size
-      
-      // Set the data rows
-      if (rows.length > 1) {
-        sheet.getRange(2, 1, rows.length - 1, rows[0].length).setValues(rows.slice(1));
-      }
+      headerRange.setFontSize(12);
+      console.log('Formatted headers');
       
       // Auto-resize columns
       for (let i = 1; i <= rows[0].length; i++) {
         sheet.autoResizeColumn(i);
       }
+      console.log('Auto-resized columns');
     }
     
-    // Set CORS headers for cross-domain requests
-    const output = ContentService.createTextOutput(JSON.stringify({
+    console.log('Data import completed successfully');
+    return ContentService.createTextOutput(JSON.stringify({
       status: 'success',
       message: 'Data imported successfully',
       rowCount: rows.length - 1 // Subtract 1 for the header row
     })).setMimeType(ContentService.MimeType.JSON);
     
-    return output;
-    
   } catch (error) {
+    console.log('Unexpected error:', error.message);
     return ContentService.createTextOutput(JSON.stringify({
       status: 'error',
       message: 'An unexpected error occurred: ' + error.message
