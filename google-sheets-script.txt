@@ -13,28 +13,24 @@ function doGet(e) {
 function doPost(e) {
   console.log('Received POST request');
   try {
-    // Get the sheet ID from the request parameters or payload
-    let sheetId;
-    let parsedData;
-    
-    // Parse the request data
+    // Get the sheet ID and data from the request
     const requestData = JSON.parse(e.postData.contents);
-    sheetId = requestData.sheetId;
-    parsedData = requestData.data;
+    const sheetId = requestData.sheetId;
+    const rows = requestData.data; // Data is now directly an array of rows
     
     if (!sheetId) {
-      console.log('Error: No sheet ID provided in request body');
+      console.log('Error: No sheet ID provided');
       return ContentService.createTextOutput(JSON.stringify({
         status: 'error',
-        message: 'No sheet ID provided in request body'
+        message: 'No sheet ID provided'
       })).setMimeType(ContentService.MimeType.JSON);
     }
     
-    if (!parsedData) {
-      console.log('Error: No data provided in request body');
+    if (!Array.isArray(rows)) {
+      console.log('Error: Data must be an array');
       return ContentService.createTextOutput(JSON.stringify({
         status: 'error',
-        message: 'No data provided in request body'
+        message: 'Invalid data format: expected an array'
       })).setMimeType(ContentService.MimeType.JSON);
     }
     
@@ -60,90 +56,18 @@ function doPost(e) {
     sheet.clear();
     console.log('Cleared existing data');
     
-    // Check if we have data rows directly or need to extract them
-    let rows = [];
-    
-    if (Array.isArray(parsedData.data)) {
-      console.log('Processing direct array data');
-      // Data is already in the expected format
-      rows = parsedData.data;
-    } else if (parsedData.data && Array.isArray(parsedData.data.data)) {
-      console.log('Processing nested data structure');
-      // Data is nested one level deeper
-      const leads = parsedData.data.data;
-      console.log('Found', leads.length, 'leads to process');
-      
-      // Define the specific fields to include
-      const specificFields = [
-        "contact_last_product",
-        "contacts_name",
-        "contacts_mobile1",
-        "contact_city",
-        "last_contact_date",
-        "last_product_qty",
-        "contacts_company"
-      ];
-      
-      // Add the headers to the sheet with friendly names
-      const friendlyHeaders = [
-        "PRODUCT",
-        "CUSTOMER",
-        "CONTACT",
-        "CITY",
-        "LEAD DATE",
-        "REQUIREMENTS",
-        "FIRM"
-      ];
-      
-      // Add headers as first row
-      rows.push(friendlyHeaders);
-      console.log('Added headers');
-      
-      // Prepare the data rows with only the specific fields
-      for (let i = 0; i < leads.length; i++) {
-        const lead = leads[i];
-        const row = [];
-        
-        for (let j = 0; j < specificFields.length; j++) {
-          const field = specificFields[j];
-          // Check for the field using various possible naming conventions
-          const value = lead[field] || 
-                       lead[field.replace('contacts_', 'contact_')] || 
-                       lead[field.replace('contact_', 'contacts_')] || 
-                       lead[field.replace('_', '')] || 
-                       lead[field.replace('_', '-')] || 
-                       '';
-          row.push(value);
-        }
-        
-        rows.push(row);
-      }
-      console.log('Processed all leads');
-    } else {
-      console.log('Error: Invalid data format');
-      return ContentService.createTextOutput(JSON.stringify({
-        status: 'error',
-        message: 'Invalid data format'
-      })).setMimeType(ContentService.MimeType.JSON);
-    }
-    
-    // Set the data in the sheet
     if (rows.length > 0) {
       console.log('Setting data in sheet, total rows:', rows.length);
-      // Set the headers in the sheet
+      
+      // Set all the data at once
+      sheet.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+      console.log('Set all data');
+      
+      // Format the headers (first row)
       const headerRange = sheet.getRange(1, 1, 1, rows[0].length);
-      headerRange.setValues([rows[0]]);
-      
-      // Format the headers with bold and larger font
       headerRange.setFontWeight('bold');
-      headerRange.setFontSize(12); // Increase font size
+      headerRange.setFontSize(12);
       console.log('Formatted headers');
-      
-      // Set the data rows
-      if (rows.length > 1) {
-        sheet.getRange(2, 1, rows.length - 1, rows[0].length).setValues(rows.slice(1));
-        console.log('Set data rows');
-      }
       
       // Auto-resize columns
       for (let i = 1; i <= rows[0].length; i++) {
@@ -153,14 +77,11 @@ function doPost(e) {
     }
     
     console.log('Data import completed successfully');
-    // Set CORS headers for cross-domain requests
-    const output = ContentService.createTextOutput(JSON.stringify({
+    return ContentService.createTextOutput(JSON.stringify({
       status: 'success',
       message: 'Data imported successfully',
       rowCount: rows.length - 1 // Subtract 1 for the header row
     })).setMimeType(ContentService.MimeType.JSON);
-    
-    return output;
     
   } catch (error) {
     console.log('Unexpected error:', error.message);

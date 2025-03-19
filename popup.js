@@ -788,23 +788,7 @@ function performDirectUpload(sheetId, scriptId, sheetUrl) {
   progressText.id = "progressText";
   progressText.textContent = "0%";
 
-  const spinner = document.createElement("div");
-  spinner.style.border = "4px solid #f3f3f3";
-  spinner.style.borderTop = "4px solid #3498db";
-  spinner.style.borderRadius = "50%";
-  spinner.style.width = "30px";
-  spinner.style.height = "30px";
-  spinner.style.animation = "spin 2s linear infinite";
-  spinner.style.margin = "10px auto";
-
-  // Add keyframes for spinner animation
-  const style = document.createElement("style");
-  style.textContent =
-    "@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }";
-  document.head.appendChild(style);
-
   progressBar.appendChild(progressFill);
-  loadingContent.appendChild(spinner);
   loadingContent.appendChild(loadingText);
   loadingContent.appendChild(progressBar);
   loadingContent.appendChild(progressText);
@@ -835,9 +819,7 @@ function performDirectUpload(sheetId, scriptId, sheetUrl) {
     },
     body: JSON.stringify({
       sheetId: sheetId,
-      data: {
-        data: rows,
-      },
+      data: rows, // Send the rows directly, not nested in another object
     }),
   })
     .then((response) => {
@@ -861,7 +843,9 @@ function performDirectUpload(sheetId, scriptId, sheetUrl) {
     })
     .catch((error) => {
       // Remove loading overlay
-      document.body.removeChild(loadingDiv);
+      if (loadingDiv.parentNode) {
+        document.body.removeChild(loadingDiv);
+      }
 
       console.error("Upload error:", error);
       alert(`Error uploading data: ${error.message}`);
