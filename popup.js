@@ -1223,6 +1223,48 @@ function checkSheetJSLibrary() {
   }
 }
 
+// Function to save Google Sheets settings
+function saveGoogleSheetsSettings() {
+  const spreadsheetId = document.getElementById("spreadsheetId").value.trim();
+  const oauth2ClientId = document.getElementById("oauth2ClientId").value.trim();
+
+  // Validate Spreadsheet ID
+  if (!spreadsheetId) {
+    alert("Please enter a valid Spreadsheet ID");
+    return;
+  }
+
+  // Save settings
+  chrome.storage.local.set(
+    {
+      spreadsheetId: spreadsheetId,
+      oauth2ClientId: oauth2ClientId,
+    },
+    function () {
+      if (chrome.runtime.lastError) {
+        alert("Error saving settings: " + chrome.runtime.lastError.message);
+      } else {
+        alert("Settings saved successfully!");
+      }
+    }
+  );
+}
+
+// Function to load Google Sheets settings
+function loadGoogleSheetsSettings() {
+  chrome.storage.local.get(
+    ["spreadsheetId", "oauth2ClientId"],
+    function (result) {
+      if (result.spreadsheetId) {
+        document.getElementById("spreadsheetId").value = result.spreadsheetId;
+      }
+      if (result.oauth2ClientId) {
+        document.getElementById("oauth2ClientId").value = result.oauth2ClientId;
+      }
+    }
+  );
+}
+
 // Update the event listeners in the document ready function
 document.addEventListener("DOMContentLoaded", function () {
   try {
@@ -1377,6 +1419,12 @@ document.addEventListener("DOMContentLoaded", function () {
         document.getElementById("buttonContainer").appendChild(lastUsedSheet);
       }
     });
+
+    // Add event listener for save settings button
+    addClickListener("saveSettings", saveGoogleSheetsSettings);
+
+    // Load saved settings
+    loadGoogleSheetsSettings();
   } catch (error) {
     alert("Error initializing extension popup: " + error.message);
   }

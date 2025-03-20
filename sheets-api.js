@@ -56,6 +56,32 @@ async function createSpreadsheet(title) {
   return await response.json();
 }
 
+// Function to check if spreadsheet exists and is accessible
+async function checkSpreadsheetAccess(spreadsheetId) {
+  const token = await getAuthToken();
+
+  try {
+    const response = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        "Cannot access the specified spreadsheet. Please check the Spreadsheet ID and make sure you have access to it."
+      );
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error checking spreadsheet access:", error);
+    throw new Error(
+      "Cannot access the specified spreadsheet. Please check the Spreadsheet ID and make sure you have access to it."
+    );
+  }
+}
+
 // Function to update spreadsheet data
 async function updateSpreadsheetData(spreadsheetId, range, values) {
   const token = await getAuthToken();
@@ -85,33 +111,158 @@ async function updateSpreadsheetData(spreadsheetId, range, values) {
 async function formatSpreadsheet(spreadsheetId, requests) {
   const token = await getAuthToken();
 
+  try {
+    // First, get the sheet ID of the first sheet
+    const response = await fetch(`${SHEETS_API_BASE}/${spreadsheetId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to get spreadsheet information");
+    }
+
+    const spreadsheet = await response.json();
+    const firstSheetId = spreadsheet.sheets[0].properties.sheetId;
+
+    // Update the requests with the correct sheet ID
+    const updatedRequests = [
+      {
+        // Format headers
+        repeatCell: {
+          range: {
+            sheetId: firstSheetId,
+            startRowIndex: 0,
+            endRowIndex: 1,
+            startColumnIndex: 0,
+            endColumnIndex: 7,
+          },
+          cell: {
+            userEnteredFormat: {
+              backgroundColor: {
+                red: 0.9,
+                green: 0.9,
+                blue: 0.9,
+              },
+              textFormat: {
+                bold: true,
+                fontSize: 12,
+              },
+              horizontalAlignment: "CENTER",
+            },
+          },
+          fields:
+            "userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)",
+        },
+      },
+      {
+        // Auto-resize columns
+        autoResizeDimensions: {
+          dimensions: {
+            sheetId: firstSheetId,
+            dimension: "COLUMNS",
+            startIndex: 0,
+            endIndex: 7,
+          },
+        },
+      },
+    ];
+
+    // Make the formatting request
+    const formatResponse = await fetch(
+      `${SHEETS_API_BASE}/${spreadsheetId}:batchUpdate`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          requests: updatedRequests,
+        }),
+      }
+    );
+
+    if (!formatResponse.ok) {
+      const errorData = await formatResponse.json();
+      throw new Error(
+        `Failed to format spreadsheet: ${
+          errorData.error?.message || "Unknown error"
+        }`
+      );
+    }
+
+    return await formatResponse.json();
+  } catch (error) {
+    console.error("Error in formatSpreadsheet:", error);
+    // If formatting fails, we'll just return success since the data is already uploaded
+    return {
+      status: "success",
+      message: "Data uploaded successfully (formatting skipped)",
+    };
+  }
+}
+
+// Function to clear existing data in the spreadsheet
+async function clearSpreadsheetData(spreadsheetId) {
+  const token = await getAuthToken();
+
   const response = await fetch(
-    `${SHEETS_API_BASE}/${spreadsheetId}:batchUpdate`,
+    `${SHEETS_API_BASE}/${spreadsheetId}/values/A1:Z1000:clear`,
     {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        requests: requests,
-      }),
     }
   );
 
   if (!response.ok) {
-    throw new Error("Failed to format spreadsheet");
+    throw new Error("Failed to clear spreadsheet data");
   }
 
   return await response.json();
 }
 
 // Main function to upload leads to Google Sheets
-async function uploadLeadsToSheets(leads, sheetTitle) {
+async function uploadLeadsToSheets(leads, sheetTitle = null) {
   try {
-    // Create a new spreadsheet
-    const spreadsheet = await createSpreadsheet(sheetTitle);
-    const spreadsheetId = spreadsheet.spreadsheetId;
+    let spreadsheetId;
+    let spreadsheetUrl;
+
+    // Check if we have a saved spreadsheet ID
+    const settings = await new Promise((resolve) => {
+      chrome.storage.local.get(["spreadsheetId", "oauth2ClientId"], resolve);
+    });
+
+    if (settings.spreadsheetId) {
+      // Use existing spreadsheet
+      try {
+        const spreadsheet = await checkSpreadsheetAccess(
+          settings.spreadsheetId
+        );
+        spreadsheetId = settings.spreadsheetId;
+        spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
+
+        // Clear existing data
+        await clearSpreadsheetData(spreadsheetId);
+      } catch (error) {
+        console.error("Error accessing existing spreadsheet:", error);
+        throw new Error(
+          "Cannot access the specified spreadsheet. Please check your settings and make sure you have access to the spreadsheet."
+        );
+      }
+    } else {
+      // Create new spreadsheet if no ID is saved
+      if (!sheetTitle) {
+        sheetTitle = `IndiaMart Leads - ${new Date().toLocaleDateString()}`;
+      }
+      const spreadsheet = await createSpreadsheet(sheetTitle);
+      spreadsheetId = spreadsheet.spreadsheetId;
+      spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
+    }
 
     // Prepare the data
     const headers = [
@@ -195,7 +346,7 @@ async function uploadLeadsToSheets(leads, sheetTitle) {
     await formatSpreadsheet(spreadsheetId, formatRequests);
 
     // Return the spreadsheet URL
-    return `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
+    return spreadsheetUrl;
   } catch (error) {
     console.error("Error uploading to sheets:", error);
     throw error;
