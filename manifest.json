@@ -10,12 +10,22 @@
     "tabs",
     "cookies",
     "clipboardWrite",
-    "activeTab"
+    "activeTab",
+    "identity"
   ],
+  "oauth2": {
+    "client_id": "172297724340-llo0easv2a058ui3vqp1ev6vv59vn2s9.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/spreadsheets",
+      "https://www.googleapis.com/auth/drive.file"
+    ]
+  },
   "host_permissions": [
     "https://seller.indiamart.com/*",
     "https://docs.google.com/spreadsheets/*",
-    "https://script.google.com/macros/*"
+    "https://sheets.googleapis.com/*",
+    "https://www.googleapis.com/*",
+    "https://accounts.google.com/*"
   ],
   "background": {
     "service_worker": "background.js",

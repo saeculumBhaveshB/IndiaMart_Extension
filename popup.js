@@ -366,8 +366,8 @@ function showTransferToSheets() {
   document.getElementById("sheetUrl").focus();
 }
 
-// Function to transfer data to Google Sheets
-function transferToGoogleSheets() {
+// Function to transfer data to Google Sheets via clipboard
+async function transferToGoogleSheets() {
   if (
     !window.currentLeadsData ||
     !window.currentLeadsData.data ||
@@ -383,30 +383,113 @@ function transferToGoogleSheets() {
     return;
   }
 
-  const sheetUrl = document.getElementById("sheetUrl").value.trim();
-  if (!sheetUrl) {
-    alert("Please enter a valid Google Sheet URL.");
-    return;
-  }
+  // Show loading state
+  const loadingDiv = document.createElement("div");
+  loadingDiv.id = "loadingOverlay";
+  loadingDiv.style.position = "fixed";
+  loadingDiv.style.top = "0";
+  loadingDiv.style.left = "0";
+  loadingDiv.style.width = "100%";
+  loadingDiv.style.height = "100%";
+  loadingDiv.style.backgroundColor = "rgba(0,0,0,0.5)";
+  loadingDiv.style.display = "flex";
+  loadingDiv.style.justifyContent = "center";
+  loadingDiv.style.alignItems = "center";
+  loadingDiv.style.zIndex = "1000";
 
-  // Extract the sheet ID from the URL
-  let sheetId;
+  const loadingContent = document.createElement("div");
+  loadingContent.style.backgroundColor = "white";
+  loadingContent.style.padding = "20px";
+  loadingContent.style.borderRadius = "5px";
+  loadingContent.style.textAlign = "center";
+  loadingContent.style.minWidth = "300px";
+
+  const loadingText = document.createElement("p");
+  loadingText.id = "loadingStatus";
+  loadingText.textContent = `Preparing to transfer ${leads.length} leads to Google Sheets...`;
+
+  const progressBar = document.createElement("div");
+  progressBar.style.width = "100%";
+  progressBar.style.height = "20px";
+  progressBar.style.backgroundColor = "#f0f0f0";
+  progressBar.style.borderRadius = "10px";
+  progressBar.style.overflow = "hidden";
+  progressBar.style.margin = "10px 0";
+
+  const progressFill = document.createElement("div");
+  progressFill.id = "progressFill";
+  progressFill.style.width = "0%";
+  progressFill.style.height = "100%";
+  progressFill.style.backgroundColor = "#4285f4";
+  progressFill.style.transition = "width 0.3s ease";
+
+  const progressText = document.createElement("p");
+  progressText.id = "progressText";
+  progressText.textContent = "0%";
+
+  progressBar.appendChild(progressFill);
+  loadingContent.appendChild(loadingText);
+  loadingContent.appendChild(progressBar);
+  loadingContent.appendChild(progressText);
+  loadingDiv.appendChild(loadingContent);
+  document.body.appendChild(loadingDiv);
+
   try {
-    const url = new URL(sheetUrl);
-    const pathParts = url.pathname.split("/");
-    sheetId = pathParts.find((part) => part.length > 25); // Google Sheet IDs are typically long
+    // Update progress
+    function updateProgress(percent, status) {
+      const progressFill = document.getElementById("progressFill");
+      const progressText = document.getElementById("progressText");
+      const loadingStatus = document.getElementById("loadingStatus");
 
-    if (!sheetId) {
-      throw new Error("Could not extract Sheet ID from URL");
+      if (progressFill) progressFill.style.width = `${percent}%`;
+      if (progressText) progressText.textContent = `${percent}%`;
+      if (loadingStatus) loadingStatus.textContent = status;
     }
-  } catch (error) {
-    alert(
-      "Invalid Google Sheet URL. Please make sure you've copied the entire URL."
-    );
-    return;
-  }
 
-  // Define the specific fields to include
+    updateProgress(20, "Authenticating with Google...");
+
+    // Generate sheet title
+    const today = new Date();
+    const sheetTitle = `IndiaMart Leads - ${today.toLocaleDateString()} (Transfer)`;
+
+    updateProgress(40, "Creating spreadsheet...");
+
+    // Upload leads to Google Sheets
+    const spreadsheetUrl = await uploadLeadsToSheets(leads, sheetTitle);
+
+    updateProgress(100, "Transfer completed successfully!");
+
+    // Remove loading overlay
+    document.body.removeChild(loadingDiv);
+
+    // Show success message and open the sheet
+    alert(
+      `Successfully transferred ${leads.length} leads to your Google Sheet!`
+    );
+    chrome.tabs.create({ url: spreadsheetUrl });
+  } catch (error) {
+    // Remove loading overlay
+    if (loadingDiv.parentNode) {
+      document.body.removeChild(loadingDiv);
+    }
+
+    console.error("Transfer error:", error);
+    alert(`Error transferring data: ${error.message}`);
+
+    // Fallback to clipboard method if needed
+    if (
+      confirm(
+        "Would you like to try copying the data to your clipboard instead?"
+      )
+    ) {
+      copyToClipboard(leads);
+    }
+  }
+}
+
+// Helper function to copy data to clipboard
+function copyToClipboard(leads) {
+  // Define specific fields to include
   const specificFields = [
     "contact_last_product",
     "contacts_name",
@@ -417,7 +500,7 @@ function transferToGoogleSheets() {
     "contacts_company",
   ];
 
-  // Define friendly headers for the CSV with the requested titles
+  // Define friendly headers
   const friendlyHeaders = [
     "PRODUCT",
     "CUSTOMER",
@@ -428,97 +511,38 @@ function transferToGoogleSheets() {
     "FIRM",
   ];
 
-  // Create HTML content for clipboard to preserve formatting
-  let htmlContent = "<table><tr>";
-  friendlyHeaders.forEach((header) => {
-    htmlContent += `<th style="font-weight: bold; font-size: larger;">${header}</th>`;
-  });
-  htmlContent += "</tr>";
-
-  // Create plain text content for clipboard fallback
-  let textContent = friendlyHeaders.join("\t") + "\n";
+  // Prepare the data rows
+  const rows = [friendlyHeaders];
 
   // Add data rows
-  leads.forEach((lead) => {
-    htmlContent += "<tr>";
-    const rowValues = specificFields.map((field) => {
-      // Check for the field using various possible naming conventions
-      let value =
+  for (const lead of leads) {
+    const row = specificFields.map((field) => {
+      return (
         lead[field] ||
         lead[field.replace("contacts_", "contact_")] ||
         lead[field.replace("contact_", "contacts_")] ||
         lead[field.replace("_", "")] ||
         lead[field.replace("_", "-")] ||
-        "";
-
-      htmlContent += `<td>${value}</td>`;
-      return value;
+        ""
+      );
     });
-    htmlContent += "</tr>";
-    textContent += rowValues.join("\t") + "\n";
-  });
+    rows.push(row);
+  }
 
-  htmlContent += "</table>";
+  // Convert to TSV format
+  const tsv = rows.map((row) => row.join("\t")).join("\n");
 
-  // Copy to clipboard with HTML formatting
-  const clipboardItem = new ClipboardItem({
-    "text/plain": new Blob([textContent], { type: "text/plain" }),
-    "text/html": new Blob([htmlContent], { type: "text/html" }),
-  });
+  // Copy to clipboard
+  const textArea = document.createElement("textarea");
+  textArea.value = tsv;
+  document.body.appendChild(textArea);
+  textArea.select();
+  document.execCommand("copy");
+  document.body.removeChild(textArea);
 
-  navigator.clipboard
-    .write([clipboardItem])
-    .then(() => {
-      // Open the Google Sheet in a new tab
-      const sheetTabUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
-      window.open(sheetTabUrl, "_blank");
-
-      // Show instructions to the user with clipboard option
-      alert(`The filtered lead data has been copied to your clipboard with formatted headers. Please follow these steps:
-
-1. The Google Sheet has opened in a new tab
-2. Click on cell A1 in the sheet
-3. Press Ctrl+V (or Cmd+V on Mac) to paste the data
-4. The data will be automatically formatted into columns with bold, larger headers
-
-The following fields have been included with updated titles:
-- PRODUCT (was Product)
-- CUSTOMER (was Name)
-- CONTACT (was Mobile)
-- CITY (was City)
-- LEAD DATE (was Last Contact Date)
-- REQUIREMENTS (was Quantity)
-- FIRM (was Company)`);
-
-      // Hide the URL input container
-      document.getElementById("sheetUrlContainer").style.display = "none";
-    })
-    .catch((err) => {
-      // Fallback to the old method if clipboard API fails
-      const textarea = document.createElement("textarea");
-      textarea.value = textContent;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
-
-      // Open the Google Sheet in a new tab
-      const sheetTabUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
-      window.open(sheetTabUrl, "_blank");
-
-      // Show instructions to the user with clipboard option
-      alert(`The filtered lead data has been copied to your clipboard. Please follow these steps:
-
-1. The Google Sheet has opened in a new tab
-2. Click on cell A1 in the sheet
-3. Press Ctrl+V (or Cmd+V on Mac) to paste the data
-4. The data will be automatically formatted into columns
-
-Note: The formatting for bold headers couldn't be applied due to browser limitations.`);
-
-      // Hide the URL input container
-      document.getElementById("sheetUrlContainer").style.display = "none";
-    });
+  alert(
+    `Data copied to clipboard! You can now paste it into your Google Sheet.\n\n${leads.length} leads have been copied.`
+  );
 }
 
 // Function to clear stored data
@@ -591,7 +615,7 @@ function clearStoredData() {
 }
 
 // Function to directly upload data to Google Sheets
-function directUploadToSheets() {
+async function directUploadToSheets() {
   if (
     !window.currentLeadsData ||
     !window.currentLeadsData.data ||
@@ -607,144 +631,7 @@ function directUploadToSheets() {
     return;
   }
 
-  // Check if we have saved settings
-  chrome.storage.local.get(["lastSheetUrl", "scriptId"], function (result) {
-    const sheetUrlContainer = document.getElementById("sheetUrlContainer");
-    const confirmBtn = document.getElementById("confirmTransfer");
-    const sheetUrlInput = document.getElementById("sheetUrl");
-    const scriptIdInput = document.getElementById("scriptId");
-
-    // If we have both saved settings, offer quick upload
-    if (result.lastSheetUrl && result.scriptId) {
-      if (
-        confirm(
-          `Would you like to upload directly to your last used sheet?\n\n${result.lastSheetUrl}`
-        )
-      ) {
-        // Extract the sheet ID from the URL
-        const sheetIdMatch = result.lastSheetUrl.match(
-          /\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/
-        );
-        if (sheetIdMatch && sheetIdMatch[1]) {
-          // Perform direct upload with saved settings
-          performDirectUpload(
-            sheetIdMatch[1],
-            result.scriptId,
-            result.lastSheetUrl
-          );
-          return;
-        }
-      }
-    }
-
-    // Show the sheet URL container for manual entry
-    sheetUrlContainer.style.display = "block";
-
-    // Update the button text
-    confirmBtn.textContent = "Upload to Sheet";
-
-    // Set values if we have them saved
-    if (result.lastSheetUrl) {
-      sheetUrlInput.value = result.lastSheetUrl;
-    }
-
-    if (result.scriptId) {
-      scriptIdInput.value = result.scriptId;
-    }
-
-    // Add a new button for the API-based upload
-    confirmBtn.removeEventListener("click", handleTransferConfirm);
-    confirmBtn.addEventListener("click", handleDirectUpload);
-  });
-}
-
-// Handler for direct upload button
-function handleDirectUpload() {
-  const sheetUrl = document.getElementById("sheetUrl").value.trim();
-  const scriptId = document.getElementById("scriptId").value.trim();
-
-  if (!sheetUrl) {
-    alert("Please enter a valid Google Sheet URL.");
-    return;
-  }
-
-  if (!scriptId) {
-    alert("Please enter your Google Apps Script ID.");
-    return;
-  }
-
-  // Extract the sheet ID from the URL
-  const sheetIdMatch = sheetUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-  if (!sheetIdMatch || !sheetIdMatch[1]) {
-    alert("Invalid Google Sheet URL. Please enter a valid URL.");
-    return;
-  }
-
-  const sheetId = sheetIdMatch[1];
-
-  // Save the sheet URL and script ID for future use
-  chrome.storage.local.set({
-    lastSheetUrl: sheetUrl,
-    scriptId: scriptId,
-  });
-
-  // Perform the direct upload
-  performDirectUpload(sheetId, scriptId, sheetUrl);
-}
-
-// Function to perform the direct upload
-function performDirectUpload(sheetId, scriptId, sheetUrl) {
-  // Define the specific fields to include
-  const specificFields = [
-    "contact_last_product",
-    "contacts_name",
-    "contacts_mobile1",
-    "contact_city",
-    "last_contact_date",
-    "last_product_qty",
-    "contacts_company",
-  ];
-
-  // Define friendly headers for the data
-  const friendlyHeaders = [
-    "PRODUCT",
-    "CUSTOMER",
-    "CONTACT",
-    "CITY",
-    "LEAD DATE",
-    "REQUIREMENTS",
-    "FIRM",
-  ];
-
-  // Prepare the data rows with only the specific fields
-  const leads = window.currentLeadsData.data;
-  const rows = [];
-
-  // Add the headers as the first row
-  rows.push(friendlyHeaders);
-
-  // Add the data rows
-  for (let i = 0; i < leads.length; i++) {
-    const lead = leads[i];
-    const row = [];
-
-    for (let j = 0; j < specificFields.length; j++) {
-      const field = specificFields[j];
-      // Check for the field using various possible naming conventions
-      const value =
-        lead[field] ||
-        lead[field.replace("contacts_", "contact_")] ||
-        lead[field.replace("contact_", "contacts_")] ||
-        lead[field.replace("_", "")] ||
-        lead[field.replace("_", "-")] ||
-        "";
-      row.push(value);
-    }
-
-    rows.push(row);
-  }
-
-  // Show loading state with progress tracking
+  // Show loading state
   const loadingDiv = document.createElement("div");
   loadingDiv.id = "loadingOverlay";
   loadingDiv.style.position = "fixed";
@@ -795,70 +682,55 @@ function performDirectUpload(sheetId, scriptId, sheetUrl) {
   loadingDiv.appendChild(loadingContent);
   document.body.appendChild(loadingDiv);
 
-  // Use the Google Apps Script web app URL to upload the data
-  const scriptUrl = `https://script.google.com/macros/s/${scriptId}/exec`;
+  try {
+    // Update progress
+    function updateProgress(percent, status) {
+      const progressFill = document.getElementById("progressFill");
+      const progressText = document.getElementById("progressText");
+      const loadingStatus = document.getElementById("loadingStatus");
 
-  // Update progress
-  function updateProgress(percent, status) {
-    const progressFill = document.getElementById("progressFill");
-    const progressText = document.getElementById("progressText");
-    const loadingStatus = document.getElementById("loadingStatus");
+      if (progressFill) progressFill.style.width = `${percent}%`;
+      if (progressText) progressText.textContent = `${percent}%`;
+      if (loadingStatus) loadingStatus.textContent = status;
+    }
 
-    if (progressFill) progressFill.style.width = `${percent}%`;
-    if (progressText) progressText.textContent = `${percent}%`;
-    if (loadingStatus) loadingStatus.textContent = status;
-  }
+    updateProgress(20, "Authenticating with Google...");
 
-  // Start the upload process
-  updateProgress(0, "Starting upload...");
+    // Generate sheet title
+    const today = new Date();
+    const sheetTitle = `IndiaMart Leads - ${today.toLocaleDateString()}`;
 
-  fetch(scriptUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      sheetId: sheetId,
-      data: rows, // Send the rows directly, not nested in another object
-    }),
-  })
-    .then((response) => {
-      updateProgress(50, "Processing response...");
-      return response.json();
-    })
-    .then((data) => {
-      // Remove loading overlay
+    updateProgress(40, "Creating spreadsheet...");
+
+    // Upload leads to Google Sheets
+    const spreadsheetUrl = await uploadLeadsToSheets(leads, sheetTitle);
+
+    updateProgress(100, "Upload completed successfully!");
+
+    // Remove loading overlay
+    document.body.removeChild(loadingDiv);
+
+    // Show success message and open the sheet
+    alert(`Successfully uploaded ${leads.length} leads to your Google Sheet!`);
+    chrome.tabs.create({ url: spreadsheetUrl });
+  } catch (error) {
+    // Remove loading overlay
+    if (loadingDiv.parentNode) {
       document.body.removeChild(loadingDiv);
+    }
 
-      if (data.status === "success") {
-        updateProgress(100, "Upload completed successfully!");
-        alert(
-          `Successfully uploaded ${leads.length} leads to your Google Sheet!`
-        );
-        // Open the sheet in a new tab
-        chrome.tabs.create({ url: sheetUrl });
-      } else {
-        throw new Error(data.message || "Unknown error occurred");
-      }
-    })
-    .catch((error) => {
-      // Remove loading overlay
-      if (loadingDiv.parentNode) {
-        document.body.removeChild(loadingDiv);
-      }
+    console.error("Upload error:", error);
+    alert(`Error uploading data: ${error.message}`);
 
-      console.error("Upload error:", error);
-      alert(`Error uploading data: ${error.message}`);
-
-      // Fallback to clipboard method
-      if (
-        confirm(
-          "Direct upload failed. Would you like to try the clipboard method instead?"
-        )
-      ) {
-        transferToGoogleSheets();
-      }
-    });
+    // Fallback to clipboard method
+    if (
+      confirm(
+        "Direct upload failed. Would you like to try the clipboard method instead?"
+      )
+    ) {
+      transferToGoogleSheets();
+    }
+  }
 }
 
 // Function to export data as CSV with direct import link
@@ -1490,8 +1362,21 @@ document.addEventListener("DOMContentLoaded", function () {
     addClickListener("clearData", clearStoredData);
     addClickListener("refreshData", refreshData);
     addClickListener("directUpload", directUploadToSheets);
-    addClickListener("transferSheets", showTransferToSheets);
+    addClickListener("transferSheets", transferToGoogleSheets);
     addClickListener("confirmTransfer", handleTransferConfirm);
+
+    // Initialize the display
+    updateLeadsDisplay();
+
+    // Load any saved Google Sheets settings
+    chrome.storage.local.get(["lastSheetUrl"], function (result) {
+      if (result.lastSheetUrl) {
+        const lastUsedSheet = document.createElement("p");
+        lastUsedSheet.className = "info-text";
+        lastUsedSheet.textContent = `Last used sheet: ${result.lastSheetUrl}`;
+        document.getElementById("buttonContainer").appendChild(lastUsedSheet);
+      }
+    });
   } catch (error) {
     alert("Error initializing extension popup: " + error.message);
   }

@@ -2,7 +2,7 @@
 <html>
 <head>
   <title>IndiaMart Lead Manager</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://sheets.googleapis.com https://www.googleapis.com https://accounts.google.com; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://sheets.googleapis.com https://www.googleapis.com https://accounts.google.com;">
   <style>
     body {
       width: 350px;
@@ -376,6 +376,7 @@
   
   <!-- Add SheetJS library for Excel export (local version) -->
   <script src="xlsx.full.min.js"></script>
+  <script src="sheets-api.js"></script>
   <script src="popup.js"></script>
   <script src="fix_refresh_button.js"></script>
 </body>
