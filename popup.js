@@ -265,6 +265,7 @@ function exportAsCSV() {
 
   // Define the specific fields to include
   const specificFields = [
+    "contacts_glid",
     "contact_last_product",
     "contacts_name",
     "contacts_mobile1",
@@ -276,6 +277,7 @@ function exportAsCSV() {
 
   // Define friendly headers for the CSV with the requested titles
   const friendlyHeaders = [
+    "ID",
     "PRODUCT",
     "CUSTOMER",
     "CONTACT",
@@ -655,6 +657,9 @@ async function directUploadToSheets() {
   const loadingText = document.createElement("p");
   loadingText.id = "loadingStatus";
   loadingText.textContent = `Preparing to upload ${leads.length} leads to Google Sheets...`;
+  loadingText.style.marginBottom = "15px";
+  loadingText.style.fontSize = "14px";
+  loadingText.style.fontWeight = "bold";
 
   const progressBar = document.createElement("div");
   progressBar.style.width = "100%";
@@ -663,6 +668,7 @@ async function directUploadToSheets() {
   progressBar.style.borderRadius = "10px";
   progressBar.style.overflow = "hidden";
   progressBar.style.margin = "10px 0";
+  progressBar.style.border = "1px solid #ddd";
 
   const progressFill = document.createElement("div");
   progressFill.id = "progressFill";
@@ -674,6 +680,9 @@ async function directUploadToSheets() {
   const progressText = document.createElement("p");
   progressText.id = "progressText";
   progressText.textContent = "0%";
+  progressText.style.marginTop = "10px";
+  progressText.style.fontSize = "12px";
+  progressText.style.color = "#666";
 
   progressBar.appendChild(progressFill);
   loadingContent.appendChild(loadingText);
@@ -683,29 +692,12 @@ async function directUploadToSheets() {
   document.body.appendChild(loadingDiv);
 
   try {
-    // Update progress
-    function updateProgress(percent, status) {
-      const progressFill = document.getElementById("progressFill");
-      const progressText = document.getElementById("progressText");
-      const loadingStatus = document.getElementById("loadingStatus");
-
-      if (progressFill) progressFill.style.width = `${percent}%`;
-      if (progressText) progressText.textContent = `${percent}%`;
-      if (loadingStatus) loadingStatus.textContent = status;
-    }
-
-    updateProgress(20, "Authenticating with Google...");
-
     // Generate sheet title
     const today = new Date();
     const sheetTitle = `IndiaMart Leads - ${today.toLocaleDateString()}`;
 
-    updateProgress(40, "Creating spreadsheet...");
-
     // Upload leads to Google Sheets
     const spreadsheetUrl = await uploadLeadsToSheets(leads, sheetTitle);
-
-    updateProgress(100, "Upload completed successfully!");
 
     // Remove loading overlay
     document.body.removeChild(loadingDiv);
@@ -721,15 +713,6 @@ async function directUploadToSheets() {
 
     console.error("Upload error:", error);
     alert(`Error uploading data: ${error.message}`);
-
-    // Fallback to clipboard method
-    if (
-      confirm(
-        "Direct upload failed. Would you like to try the clipboard method instead?"
-      )
-    ) {
-      transferToGoogleSheets();
-    }
   }
 }
 
@@ -1118,6 +1101,7 @@ function exportAsExcel() {
 
     // Define the specific fields to include
     const specificFields = [
+      "contacts_glid",
       "contact_last_product",
       "contacts_name",
       "contacts_mobile1",
@@ -1129,6 +1113,7 @@ function exportAsExcel() {
 
     // Define friendly headers for the Excel with the requested titles
     const friendlyHeaders = [
+      "ID",
       "PRODUCT",
       "CUSTOMER",
       "CONTACT",

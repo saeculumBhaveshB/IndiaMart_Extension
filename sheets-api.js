@@ -136,7 +136,7 @@ async function formatSpreadsheet(spreadsheetId, requests) {
             startRowIndex: 0,
             endRowIndex: 1,
             startColumnIndex: 0,
-            endColumnIndex: 7,
+            endColumnIndex: 8,
           },
           cell: {
             userEnteredFormat: {
@@ -163,7 +163,7 @@ async function formatSpreadsheet(spreadsheetId, requests) {
             sheetId: firstSheetId,
             dimension: "COLUMNS",
             startIndex: 0,
-            endIndex: 7,
+            endIndex: 8,
           },
         },
       },
@@ -232,7 +232,19 @@ async function uploadLeadsToSheets(leads, sheetTitle = null) {
     let spreadsheetId;
     let spreadsheetUrl;
 
+    // Update progress - Starting
+    const updateProgress = (percent, status) => {
+      const progressFill = document.getElementById("progressFill");
+      const progressText = document.getElementById("progressText");
+      const loadingStatus = document.getElementById("loadingStatus");
+
+      if (progressFill) progressFill.style.width = `${percent}%`;
+      if (progressText) progressText.textContent = `${percent}%`;
+      if (loadingStatus) loadingStatus.textContent = status;
+    };
+
     // Check if we have a saved spreadsheet ID
+    updateProgress(10, "Checking settings...");
     const settings = await new Promise((resolve) => {
       chrome.storage.local.get(["spreadsheetId", "oauth2ClientId"], resolve);
     });
@@ -240,6 +252,7 @@ async function uploadLeadsToSheets(leads, sheetTitle = null) {
     if (settings.spreadsheetId) {
       // Use existing spreadsheet
       try {
+        updateProgress(20, "Accessing existing spreadsheet...");
         const spreadsheet = await checkSpreadsheetAccess(
           settings.spreadsheetId
         );
@@ -247,6 +260,7 @@ async function uploadLeadsToSheets(leads, sheetTitle = null) {
         spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
 
         // Clear existing data
+        updateProgress(30, "Clearing existing data...");
         await clearSpreadsheetData(spreadsheetId);
       } catch (error) {
         console.error("Error accessing existing spreadsheet:", error);
@@ -256,6 +270,7 @@ async function uploadLeadsToSheets(leads, sheetTitle = null) {
       }
     } else {
       // Create new spreadsheet if no ID is saved
+      updateProgress(20, "Creating new spreadsheet...");
       if (!sheetTitle) {
         sheetTitle = `IndiaMart Leads - ${new Date().toLocaleDateString()}`;
       }
@@ -265,7 +280,9 @@ async function uploadLeadsToSheets(leads, sheetTitle = null) {
     }
 
     // Prepare the data
+    updateProgress(40, "Preparing data...");
     const headers = [
+      "ID",
       "PRODUCT",
       "CUSTOMER",
       "CONTACT",
@@ -276,6 +293,7 @@ async function uploadLeadsToSheets(leads, sheetTitle = null) {
     ];
 
     const specificFields = [
+      "contacts_glid",
       "contact_last_product",
       "contacts_name",
       "contacts_mobile1",
@@ -288,67 +306,24 @@ async function uploadLeadsToSheets(leads, sheetTitle = null) {
     // Prepare rows with headers and data
     const rows = [headers];
     leads.forEach((lead) => {
-      const row = specificFields.map((field) => {
-        return (
-          lead[field] ||
-          lead[field.replace("contacts_", "contact_")] ||
-          lead[field.replace("contact_", "contacts_")] ||
-          lead[field.replace("_", "")] ||
-          lead[field.replace("_", "-")] ||
-          ""
-        );
-      });
+      const row = specificFields.map((field) => lead[field] || "");
       rows.push(row);
     });
 
-    // Update the spreadsheet with data
-    await updateSpreadsheetData(spreadsheetId, "A1:G" + rows.length, rows);
+    // Update spreadsheet with data
+    updateProgress(60, "Uploading data...");
+    await updateSpreadsheetData(spreadsheetId, "A1:H" + rows.length, rows);
 
     // Format the spreadsheet
-    const formatRequests = [
-      {
-        // Format headers
-        repeatCell: {
-          range: {
-            sheetId: 0,
-            startRowIndex: 0,
-            endRowIndex: 1,
-          },
-          cell: {
-            userEnteredFormat: {
-              textFormat: {
-                bold: true,
-                fontSize: 12,
-              },
-              backgroundColor: {
-                red: 0.9,
-                green: 0.9,
-                blue: 0.9,
-              },
-            },
-          },
-          fields: "userEnteredFormat(textFormat,backgroundColor)",
-        },
-      },
-      {
-        // Auto-resize columns
-        autoResizeDimensions: {
-          dimensions: {
-            sheetId: 0,
-            dimension: "COLUMNS",
-            startIndex: 0,
-            endIndex: 7,
-          },
-        },
-      },
-    ];
+    updateProgress(80, "Formatting spreadsheet...");
+    await formatSpreadsheet(spreadsheetId);
 
-    await formatSpreadsheet(spreadsheetId, formatRequests);
+    // Final update
+    updateProgress(100, "Upload completed successfully!");
 
-    // Return the spreadsheet URL
     return spreadsheetUrl;
   } catch (error) {
-    console.error("Error uploading to sheets:", error);
+    console.error("Error in uploadLeadsToSheets:", error);
     throw error;
   }
 }
