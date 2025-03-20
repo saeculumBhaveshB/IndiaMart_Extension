@@ -279,159 +279,90 @@ async function updateSpreadsheetDataWithMerge(
     "contacts_company",
   ];
 
-  // Verify/fix header row if needed
-  if (existingRows.length === 0) {
-    // No data at all, add headers
-    await updateSpreadsheetData(spreadsheetId, "A1:H1", [headers]);
-    existingRows.push(headers);
-  } else if (!arraysEqual(existingRows[0], headers)) {
-    // Headers don't match, update them
-    await updateSpreadsheetData(spreadsheetId, "A1:H1", [headers]);
-    existingRows[0] = headers;
-  }
-
   // Create a map of existing leads by ID
   const existingLeadsMap = new Map();
   if (existingRows.length > 1) {
     // Skip header row
     for (let i = 1; i < existingRows.length; i++) {
       const row = existingRows[i];
-      if (row && row[0]) {
-        // Check if row exists and has an ID
-        existingLeadsMap.set(row[0], {
-          index: i,
-          data: row,
-        });
+      if (row[0]) {
+        // If ID exists
+        existingLeadsMap.set(row[0], i);
       }
     }
   }
 
-  // Prepare batch updates
-  const batchRequests = {
-    valueInputOption: "RAW",
-    data: [],
-  };
-
-  // Keep track of new rows to append
+  // Prepare updates for existing rows and new rows to append
+  const updates = [];
   const newRows = [];
 
   // Process each new lead
   newLeads.forEach((lead) => {
-    // Ensure we have a valid lead with an ID
-    if (!lead || !lead.contacts_glid) {
-      console.warn("Skipping invalid lead:", lead);
-      return;
-    }
-
-    const row = specificFields.map((field) => {
-      const value = lead[field];
-      // Convert null/undefined to empty string, but preserve 0 values
-      return value === null || value === undefined ? "" : value.toString();
-    });
-
+    const row = specificFields.map((field) => lead[field] || "");
     const leadId = lead.contacts_glid;
-    const existing = existingLeadsMap.get(leadId);
 
-    if (existing) {
-      // Compare with existing data to avoid unnecessary updates
-      if (!arraysEqual(existing.data, row)) {
-        batchRequests.data.push({
-          range: `A${existing.index + 1}:H${existing.index + 1}`,
-          values: [row],
-        });
-      }
+    if (existingLeadsMap.has(leadId)) {
+      // Update existing row
+      const rowIndex = existingLeadsMap.get(leadId);
+      updates.push({
+        range: `A${rowIndex + 1}:H${rowIndex + 1}`,
+        values: [row],
+      });
     } else {
+      // Add to new rows
       newRows.push(row);
     }
   });
 
-  let updatedCount = 0;
-  let newCount = 0;
-
-  // Perform batch updates if there are any
-  if (batchRequests.data.length > 0) {
-    try {
-      const batchUpdateResponse = await fetch(
-        `${SHEETS_API_BASE}/${spreadsheetId}/values:batchUpdate`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(batchRequests),
-        }
-      );
-
-      if (!batchUpdateResponse.ok) {
-        const errorData = await batchUpdateResponse.json();
-        throw new Error(
-          `Failed to update existing rows: ${
-            errorData.error?.message || "Unknown error"
-          }`
-        );
+  // Perform updates for existing rows
+  if (updates.length > 0) {
+    const batchUpdateResponse = await fetch(
+      `${SHEETS_API_BASE}/${spreadsheetId}/values:batchUpdate`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          valueInputOption: "RAW",
+          data: updates,
+        }),
       }
+    );
 
-      updatedCount = batchRequests.data.length;
-    } catch (error) {
-      console.error("Error updating existing rows:", error);
-      throw error;
+    if (!batchUpdateResponse.ok) {
+      throw new Error("Failed to update existing rows");
     }
   }
 
   // Append new rows if any
   if (newRows.length > 0) {
-    try {
-      const appendResponse = await fetch(
-        `${SHEETS_API_BASE}/${spreadsheetId}/values/A${
-          existingRows.length + 1
-        }:H${existingRows.length + newRows.length}:append?valueInputOption=RAW`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            values: newRows,
-          }),
-        }
-      );
-
-      if (!appendResponse.ok) {
-        const errorData = await appendResponse.json();
-        throw new Error(
-          `Failed to append new rows: ${
-            errorData.error?.message || "Unknown error"
-          }`
-        );
+    const appendResponse = await fetch(
+      `${SHEETS_API_BASE}/${spreadsheetId}/values/A${
+        existingRows.length + 1
+      }:H${existingRows.length + newRows.length}:append?valueInputOption=RAW`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          values: newRows,
+        }),
       }
+    );
 
-      newCount = newRows.length;
-    } catch (error) {
-      console.error("Error appending new rows:", error);
-      throw error;
+    if (!appendResponse.ok) {
+      throw new Error("Failed to append new rows");
     }
   }
 
-  // Ensure header formatting is maintained
-  await formatSpreadsheet(spreadsheetId);
-
   return {
-    updatedRows: updatedCount,
-    newRows: newCount,
-    totalRows: existingRows.length + newCount,
+    updatedRows: updates.length,
+    newRows: newRows.length,
   };
-}
-
-// Helper function to compare arrays
-function arraysEqual(a, b) {
-  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length)
-    return false;
-  for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false;
-  }
-  return true;
 }
 
 // Main function to upload leads to Google Sheets
