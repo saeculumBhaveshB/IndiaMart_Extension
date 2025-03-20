@@ -208,8 +208,9 @@ async function formatSpreadsheet(spreadsheetId, requests) {
 async function clearSpreadsheetData(spreadsheetId) {
   const token = await getAuthToken();
 
+  // Only clear columns A through H
   const response = await fetch(
-    `${SHEETS_API_BASE}/${spreadsheetId}/values/A1:Z1000:clear`,
+    `${SHEETS_API_BASE}/${spreadsheetId}/values/A1:H1000:clear`,
     {
       method: "POST",
       headers: {
@@ -259,8 +260,8 @@ async function uploadLeadsToSheets(leads, sheetTitle = null) {
         spreadsheetId = settings.spreadsheetId;
         spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
 
-        // Clear existing data
-        updateProgress(30, "Clearing existing data...");
+        // Clear existing data (only columns A through H)
+        updateProgress(30, "Clearing existing data (columns A-H)...");
         await clearSpreadsheetData(spreadsheetId);
       } catch (error) {
         console.error("Error accessing existing spreadsheet:", error);
@@ -310,12 +311,12 @@ async function uploadLeadsToSheets(leads, sheetTitle = null) {
       rows.push(row);
     });
 
-    // Update spreadsheet with data
-    updateProgress(60, "Uploading data...");
+    // Update spreadsheet with data (only columns A through H)
+    updateProgress(60, "Uploading data to columns A-H...");
     await updateSpreadsheetData(spreadsheetId, "A1:H" + rows.length, rows);
 
-    // Format the spreadsheet
-    updateProgress(80, "Formatting spreadsheet...");
+    // Format the spreadsheet (only columns A through H)
+    updateProgress(80, "Formatting columns A-H...");
     await formatSpreadsheet(spreadsheetId);
 
     // Final update
